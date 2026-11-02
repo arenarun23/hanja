@@ -48,7 +48,13 @@
   #chars b{font-family:"Noto Serif TC",serif;font-size:30px;color:var(--ink);font-weight:500}
   .info{overflow:auto}
   .info p{margin:0 0 10px;line-height:1.7;font-size:22px}
-  .info ul{margin:0 0 10px;padding-left:20px;line-height:1.8;font-size:22px}
+  .info ul{margin:0 0 8px;padding-left:22px;line-height:1.55;font-size:22px}
+  .info ul.cols{columns:180px 3;column-gap:22px}
+  .info li{break-inside:avoid;white-space:nowrap}
+  .info p{margin:0 0 6px}
+  .hrow{cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .hrow:active{transform:scale(.97)}
+  #listen{font-size:18px;color:var(--mute);margin-top:2px;cursor:pointer}
   .tag{font-size:18px;color:var(--accent2);margin-bottom:2px}
   .placeholder{color:var(--mute)}
   .loading{animation:pulse 1s infinite}
@@ -80,6 +86,7 @@
   <section class="panel hanja">
     <div class="hrow"><div id="big" class="placeholder">漢字</div><div id="pic"></div></div>
     <div id="reading"></div>
+    <div id="listen">🔊 한자를 누르면 읽어줘요</div>
     <div id="chars"></div>
   </section>
 
@@ -232,8 +239,8 @@ function related(word, reading){
     if (h.length === 2 && [...h].some(c=>set.has(c))) { out.push([k,h]); if (out.length >= 400) break; }
   }
   // 앞에서부터 6개를 고르되 다양하게 섞기
-  const step = Math.max(1, Math.floor(out.length / 6));
-  return out.filter((_,i)=> i % step === 0).slice(0,6);
+  const step = Math.max(1, Math.floor(out.length / 9));
+  return out.filter((_,i)=> i % step === 0).slice(0,9);
 }
 
 function render(reading, forms, idx=0){
@@ -243,20 +250,21 @@ function render(reading, forms, idx=0){
   const big = $('big'); big.className = ''; big.textContent = word; $('pic').textContent = pic(word);
   $('reading').textContent = reading;
   $('chars').innerHTML = info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.hun)} ${esc(c.eum)}${GRADE_OF[c.hanja]?`<br>${GRADE_OF[c.hanja]}급`:''}</div>`).join('');
+  say(reading);
   const rel = related(word, reading);
   $('info').innerHTML = `<h2>뜻과 쓰임</h2>
     <div class="tag">뜻풀이 (글자별 훈·음)</div>
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>(${esc(c.hun)} ${esc(c.eum)})`).join(' + ')}<br>
     → <b>${esc(reading)}</b> = ${info.map(c=>esc(c.hun||c.eum)).join(' · ')}</p>
     ${forms.length>1 ? `<div class="tag">같은 소리의 다른 한자어</div><div class="cands">${forms.map((f,i)=>`<button class="chip" data-i="${i}" ${i===idx?'style="border-color:var(--accent)"':''}>${esc(f)}</button>`).join('')}</div>`:''}
-    ${rel.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
+    ${rel.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 말</div><ul class="cols">${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
   $('info').querySelectorAll('[data-i]').forEach(b=> b.onclick = ()=>render(reading, forms, +b.dataset.i));
 }
 
 function renderChars(syl){
   const list = CH ? Object.entries(CH).filter(([h,v])=>v.some(x=>x.endsWith(' '+syl))) : [];
   $('big').className=''; $('big').textContent = list[0]?.[0] || '?'; $('pic').textContent = pic(list[0]?.[0]||'');
-  $('reading').textContent = syl;
+  $('reading').textContent = syl; say(syl);
   $('chars').innerHTML = '';
   $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">'${esc(syl)}' 음을 가진 한자</div>
     <div class="cands">${list.slice(0,60).map(([h,v])=>`<button class="chip" data-h="${h}" title="${esc(v.join(', '))}">${h} ${esc(v.find(x=>x.endsWith(' '+syl)))}</button>`).join('')}</div>`;
@@ -275,14 +283,14 @@ function lookupHanja(t){
   const info = hs.map(h=>({hanja:h, list: gradeMeaning(h) || CH[h]||[]}));
   $('reading').innerHTML = hs.length===1 ? esc((CH[t]||[]).map(x=>x.slice(x.lastIndexOf(' ')+1)).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')) + badge(t) : '';
   $('chars').innerHTML = hs.length>1 ? info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.list[0]||'')}${GRADE_OF[c.hanja]?`<br>${GRADE_OF[c.hanja]}급`:''}</div>`).join('') : '';
-  let rel = [];
+  say(info.map(c=>c.list[0]||'').join(', ')); let rel = [];
   if (hs.length === 1){
     for (const [k,v] of Object.entries(WD)){ const h = v.find(x=>x.includes(t) && x.length===2); if (h) { rel.push([k,h]); if (rel.length>=300) break; } }
-    const step = Math.max(1, Math.floor(rel.length/8)); rel = rel.filter((_,i)=>i%step===0).slice(0,8);
+    const step = Math.max(1, Math.floor(rel.length/9)); rel = rel.filter((_,i)=>i%step===0).slice(0,9);
   }
   $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">훈·음</div>
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>: ${c.list.length ? c.list.map(esc).join(' / ') : '사전에 없는 글자'}`).join('<br>')}</p>
-    ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
+    ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul class="cols">${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
 }
 
 function gradeMeaning(h){ for (const k in GR){ const x = GR[k].find(y=>y.h===h); if (x) return x.m; } return null; }
@@ -321,6 +329,15 @@ async function lookup(text){
 function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 // 한자 길이·칸 크기에 맞춰 글자 크기 자동 조절
+// --- 읽어주기 (기기 기본 목소리) ---
+let lastSay = '';
+function say(text){
+  lastSay = text || lastSay; if (!lastSay || !('speechSynthesis' in window)) return;
+  try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(lastSay); u.lang = 'ko-KR'; speechSynthesis.speak(u); }catch(e){}
+}
+document.querySelector('.hrow').addEventListener('click', ()=>say());
+$('listen').addEventListener('click', ()=>say());
+
 function fitBig(){
   const row = document.querySelector('.hrow'), panel = row.parentElement;
   const n = [...$('big').textContent].length || 1, hasPic = !!$('pic').textContent;
