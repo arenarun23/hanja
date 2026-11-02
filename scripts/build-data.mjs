@@ -17,7 +17,10 @@ for (const line of fs.readFileSync('source/hanja.txt', 'utf8').split('\n')) {
     if (!arr.includes(h)) arr.push(h);
   }
 }
-// 한자어 → 읽기 역방향 일부는 클라이언트에서 words를 훑어 만든다.
+// 같은 소리의 한자어는 '흔한 글자(급수가 쉬운 글자)'가 많은 순으로 정렬 (예: 여자 → 女子가 餘資보다 먼저)
+const LV = JSON.parse(fs.readFileSync('source/levels.json', 'utf8'));
+const score = (w) => [...w].reduce((a, c) => a + (LV[c] ?? -1), 0) / [...w].length;
+for (const k in words) words[k] = words[k].map((w, i) => [w, i]).sort((a, b) => score(b[0]) - score(a[0]) || a[1] - b[1]).map((x) => x[0]);
 fs.writeFileSync('dict/chars.json', JSON.stringify(chars));
 fs.writeFileSync('dict/words.json', JSON.stringify(words));
 console.log('chars', Object.keys(chars).length, 'words', Object.keys(words).length);
