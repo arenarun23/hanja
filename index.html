@@ -27,6 +27,9 @@
   button.btn:hover{border-color:var(--accent)}
   button.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
   button.btn.clear{flex:0 0 auto;color:var(--mute)}
+  .mode{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--mute)}
+  .seg{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:4px 14px;font:inherit;font-size:14px;cursor:pointer}
+  .seg.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
   #status{font-size:12px;color:var(--mute);margin-top:6px;min-height:16px}
   .hanja{align-items:center;justify-content:center;text-align:center}
   #big{font-family:"Noto Serif TC","Noto Serif KR",serif;font-weight:500;font-size:clamp(56px,13vw,150px);line-height:1.1;letter-spacing:.04em;color:var(--accent);word-break:keep-all}
@@ -52,6 +55,8 @@
     <div id="pad"><canvas id="cv"></canvas><div id="hint">여기에 한글 낱말을 써 보세요 (예: 학교)</div></div>
     <div class="cands" id="cands"></div>
     <div id="status"></div>
+    <div class="mode" id="mode"><span>쓰는 글자</span>
+      <button class="seg on" data-m="ko">한글</button><button class="seg" data-m="zh">漢字</button></div>
     <div class="bar">
       <button class="btn" id="bWrite">✍️ 필기</button>
       <button class="btn" id="bRec">🎙️ 녹음</button>
@@ -114,21 +119,32 @@ $('bClear').onclick = clearPad;
 function setStatus(s){ $('status').textContent = s || ''; }
 
 // --- 필기 인식 ---
+let mode = 'ko';
+document.querySelectorAll('.seg').forEach(b=> b.onclick = ()=>{
+  mode = b.dataset.m; document.querySelectorAll('.seg').forEach(x=>x.classList.toggle('on', x===b));
+  $('hint').textContent = mode==='ko' ? '여기에 한글 낱말을 써 보세요 (예: 학교)' : '여기에 한자를 써 보세요 (예: 人, 學校)';
+  if (strokes.length) $('bWrite').click();
+});
+const ENGINE = { ko:['ko-t-i0-handwrit','ko'], zh:['zh-hant-t-i0-handwrit','zh_TW'] };
 $('bWrite').onclick = async ()=>{
   if (!strokes.length){ setStatus('먼저 왼쪽 칸에 글씨를 써 주세요.'); return; }
   setStatus('필기를 인식하는 중…');
-  const r = cv.getBoundingClientRect();
+  const r = cv.getBoundingClientRect(), [itc, language] = ENGINE[mode];
   try{
-    const res = await fetch('https://inputtools.google.com/request?itc=ko-t-i0-handwrit&app=hanja',{method:'POST',headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({options:'enable_pre_space',requests:[{writing_guide:{writing_area_width:Math.round(r.width),writing_area_height:Math.round(r.height)},ink:strokes,language:'ko',max_num_results:8}]})});
+    const res = await fetch(`https://inputtools.google.com/request?itc=${itc}&app=hanja`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({options:'enable_pre_space',requests:[{writing_guide:{writing_area_width:Math.round(r.width),writing_area_height:Math.round(r.height)},ink:strokes,language,max_num_results:10}]})});
     const raw = await res.json();
     if (raw[0] !== 'SUCCESS') throw new Error('인식 실패');
-    const data = { candidates: raw[1]?.[0]?.[1] || [] };
-    const c = data.candidates || [];
+    const c = raw[1]?.[0]?.[1] || [];
     $('cands').innerHTML = '';
     c.forEach(w=>{ const b = document.createElement('button'); b.className='chip'; b.textContent = w; b.onclick = ()=>lookup(w); $('cands').appendChild(b); });
-    await dictReady; const pick = c.find(found) || c.find(x=>clean(x)) || c[0];
-    if (pick){ setStatus(`인식: ${pick}`); lookup(pick); } else setStatus('글씨를 알아보지 못했어요. 다시 써 주세요.');
+    await dictReady;
+    const known = x => mode==='zh' ? [...x].length && [...x].every(h=>CH[h]) : found(x);
+    const hit = c.find(known);
+    const pick = hit || c.find(x=>clean(x)) || c[0];
+    if (!pick){ setStatus('글씨를 알아보지 못했어요. 다시 써 주세요.'); return; }
+    setStatus(`인식: ${pick}` + (hit ? '' : mode==='ko' ? ' (사전에 없어요. 한자를 쓰셨다면 「漢字」 모드로 바꿔 보세요)' : ' (사전에 없는 글자예요)'));
+    lookup(pick);
   }catch(e){ setStatus('오류: ' + e.message); }
 };
 
@@ -216,12 +232,32 @@ function renderChars(syl){
   });
 }
 
+let REV = null;
+function lookupHanja(t){
+  const hs = [...t];
+  if (!REV){ REV = {}; for (const [k,v] of Object.entries(WD)) for (const h of v) (REV[h] ||= k); }
+  if (hs.length > 1 && REV[t]) return render(REV[t], WD[REV[t]], WD[REV[t]].indexOf(t));
+  const big = $('big'); big.className=''; big.textContent = t;
+  const info = hs.map(h=>({hanja:h, list: CH[h]||[]}));
+  $('reading').textContent = hs.length===1 ? (CH[t]||[]).map(x=>x.slice(x.lastIndexOf(' ')+1)).filter((v,i,a)=>a.indexOf(v)===i).join(' · ') : '';
+  $('chars').innerHTML = hs.length>1 ? info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.list[0]||'')}</div>`).join('') : '';
+  let rel = [];
+  if (hs.length === 1){
+    for (const [k,v] of Object.entries(WD)){ const h = v.find(x=>x.includes(t) && x.length===2); if (h) { rel.push([k,h]); if (rel.length>=300) break; } }
+    const step = Math.max(1, Math.floor(rel.length/8)); rel = rel.filter((_,i)=>i%step===0).slice(0,8);
+  }
+  $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">훈·음</div>
+    <p>${info.map(c=>`<b>${esc(c.hanja)}</b>: ${c.list.length ? c.list.map(esc).join(' / ') : '사전에 없는 글자'}`).join('<br>')}</p>
+    ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
+}
+
 function found(t){ return !!(WD && WD[clean(t)]) ; }
 
 async function lookup(text){
   await dictReady;
   const t = clean(text);
   if (!t){ setStatus('글자를 알아보지 못했어요.'); return; }
+  if ([...t].every(isH)) return lookupHanja(t);
   if (WD[t]) return render(t, WD[t]);
   if ([...t].length === 1) return renderChars(t);
   // 문장이면 가장 긴 낱말부터 찾기
