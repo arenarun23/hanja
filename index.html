@@ -46,7 +46,7 @@
   #status{font-size:18px;color:var(--mute);margin-top:6px;min-height:16px}
   .hanja{align-items:center;justify-content:center;text-align:center}
   #big{font-family:"Noto Serif TC","Noto Serif KR",serif;font-weight:700;font-size:clamp(84px,19vw,225px);line-height:1.1;letter-spacing:.04em;color:var(--accent);word-break:keep-all}
-  .hrow{display:flex;align-items:center;justify-content:center;gap:.2em;flex-wrap:nowrap;white-space:nowrap;font-size:120px;max-width:100%}
+  .hrow{display:flex;align-items:center;justify-content:center;gap:.2em;flex-wrap:nowrap;white-space:nowrap;font-size:120px;flex:1 1 0;min-height:0;width:100%;overflow:hidden}
   .hrow #big{font-size:1em}
   #pic{font-size:.6em;flex:none;line-height:1;min-height:0}
   #pic:empty{display:none}
@@ -75,10 +75,16 @@
   html,body{overscroll-behavior:none}
   #pad,canvas{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .cands{min-height:0}
+  .info > *{flex-shrink:0}   /* 내용이 넘치면 찌그러지지 않고 스크롤 */
+  #chars{display:none}   /* 글자별 훈·음은 '뜻과 쓰임' 칸에 이미 나옴 → 한자 칸을 한자에 양보 */
+  @media (max-height:800px){ #listen{display:none} }
   @media (max-width:900px){
     body{padding:8px;overflow:hidden}
-    .app{height:calc(100dvh - 16px);grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,56fr) minmax(0,21fr) minmax(0,23fr);gap:8px}
+    .app{height:calc(100dvh - 16px);grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,50fr) minmax(0,28fr) minmax(0,22fr);gap:8px}
     .left{grid-row:auto}
+  }
+  @media (max-width:900px) and (max-height:700px){
+    .app{grid-template-rows:minmax(0,46fr) minmax(0,31fr) minmax(0,23fr)}
   }
   /* 휴대폰(세로)·낮은 화면: 글자·여백을 줄여 필기 칸 확보 */
   @media (max-width:600px), (max-height:520px){
@@ -487,17 +493,15 @@ document.querySelector('.hrow').addEventListener('click', ()=>say());
 $('listen').addEventListener('click', ()=>say());
 
 function fitBig(){
-  const row = document.querySelector('.hrow'), panel = row.parentElement;
-  const n = [...$('big').textContent].length || 1, hasPic = !!$('pic').textContent;
-  const cs = getComputedStyle(panel);
-  const pw = panel.clientWidth - 40;
-  const others = [...panel.children].filter(c=>c!==row && getComputedStyle(c).display!=='none').reduce((a,c)=>a + c.offsetHeight, 0);
-  const avail = panel.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - others - 6;
-  const units = n * 1.02 + (hasPic ? 0.2 + 0.7 * ([...$('pic').textContent].length > 6 ? 2 : 1.2) : 0);
-  row.style.fontSize = Math.max(40, Math.min(pw / units, avail / 1.2, 230)) + 'px';
+  // 한자 칸(.hrow)은 남는 공간을 차지하므로, 그 칸의 가로·세로에 딱 맞게 글자 크기를 정한다
+  const row = document.querySelector('.hrow');
+  const n = [...$('big').textContent].length || 1, pic = $('pic').textContent;
+  const units = n * 1.05 + (pic ? 0.2 + 0.75 * ([...pic].length > 6 ? 2 : 1) : 0);
+  const w = row.clientWidth - 8, h = row.clientHeight - 4;
+  row.style.fontSize = Math.max(24, Math.min(w / units, h / 1.18, 340)) + 'px';
 }
 new MutationObserver(fitBig).observe(document.querySelector('.hrow'),{childList:true,characterData:true,subtree:true});
-addEventListener('resize', fitBig); fitBig();
+addEventListener('resize', fitBig); new ResizeObserver(fitBig).observe(document.querySelector('.hrow')); fitBig();
 </script>
 </body>
 </html>
