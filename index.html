@@ -209,7 +209,8 @@ $('bStop').onclick = ()=>{ if (rec) rec.stop(); else setStatus('녹음 중이 �
 
 // --- 한자 조회 (내장 사전, 무료) ---
 let CH = null, WD = null, RELIDX = null, GR = null, LV = {};
-const common = h => LV[h] ?? -1;   // 클수록 흔한 글자(8급=8 … 특급=0, 사전 밖=-1) const GRADE_OF = {};
+const GRADE_OF = {};
+const common = h => LV[h] ?? -1;   // 클수록 흔한 글자(8급=8 … 특급=0, 사전 밖=-1)
 const dictReady = Promise.all([
   fetch('dict/chars.json').then(r=>r.json()), fetch('dict/words.json').then(r=>r.json()), fetch('dict/grades.json').then(r=>r.json()), fetch('dict/levels.json').then(r=>r.json())
 ]).then(([c,w,g,lv])=>{ CH = c; WD = w; GR = g; LV = lv; for (const k in g) for (const x of g[k]) GRADE_OF[x.h] = +k; setStatus(''); });
