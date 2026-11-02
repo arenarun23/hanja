@@ -30,6 +30,11 @@
   .mode{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:18px;color:var(--mute)}
   .seg{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:4px 14px;font:inherit;font-size:21px;cursor:pointer}
   .seg.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .gchips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .gc{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:12px;padding:6px 10px;font:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:36px;line-height:1.1}
+  .gc small{font-size:20px;color:var(--mute)} .gc i{font-style:normal;font-size:28px}
+  .gc:hover{border-color:var(--accent)}
+  .badge{display:inline-block;background:var(--accent2);color:#fff;border-radius:999px;padding:0 12px;font-size:.7em;margin-left:8px}
   #status{font-size:18px;color:var(--mute);margin-top:6px;min-height:16px}
   .hanja{align-items:center;justify-content:center;text-align:center}
   #big{font-family:"Noto Serif TC","Noto Serif KR",serif;font-weight:700;font-size:clamp(84px,19vw,225px);line-height:1.1;letter-spacing:.04em;color:var(--accent);word-break:keep-all}
@@ -57,11 +62,13 @@
 <div class="app">
   <section class="panel left">
     <h2>필기 · 음성 입력</h2>
-    <div id="pad"><canvas id="cv"></canvas><div id="hint">여기에 한글 낱말을 써 보세요 (예: 학교)</div></div>
+    <div id="pad"><canvas id="cv"></canvas><div id="hint">여기에 한자를 써 보세요 (예: 人, 學校)</div></div>
     <div class="cands" id="cands"></div>
     <div id="status"></div>
     <div class="mode" id="mode"><span>쓰는 글자</span>
-      <button class="seg on" data-m="ko">한글</button><button class="seg" data-m="zh">漢字</button></div>
+      <button class="seg on" data-m="zh">漢字</button><button class="seg" data-m="ko">한글</button></div>
+    <div class="mode" id="grades"><span>급수</span>
+      <button class="seg" data-g="8">8급</button><button class="seg" data-g="7">7급</button><button class="seg" data-g="6">6급</button></div>
     <div class="bar">
       <button class="btn" id="bWrite">✍️ 필기</button>
       <button class="btn" id="bRec">🎙️ 녹음</button>
@@ -78,7 +85,7 @@
 
   <section class="panel info" id="info">
     <h2>뜻과 쓰임</h2>
-    <p class="placeholder">필기하거나 말하면 한자의 뜻과 쓰임이 여기에 나옵니다.</p>
+    <p class="placeholder">한자를 쓰거나 말하면 훈·음과 쓰임이 여기에 나옵니다. 아래 ‘급수’ 버튼으로 8·7·6급 한자를 골라 볼 수도 있어요..</p>
   </section>
 </div>
 
@@ -124,7 +131,7 @@ $('bClear').onclick = clearPad;
 function setStatus(s){ $('status').textContent = s || ''; }
 
 // --- 필기 인식 ---
-let mode = 'ko';
+let mode = 'zh';
 document.querySelectorAll('.seg').forEach(b=> b.onclick = ()=>{
   mode = b.dataset.m; document.querySelectorAll('.seg').forEach(x=>x.classList.toggle('on', x===b));
   $('hint').textContent = mode==='ko' ? '여기에 한글 낱말을 써 보세요 (예: 학교)' : '여기에 한자를 써 보세요 (예: 人, 學校)';
@@ -176,10 +183,10 @@ $('bRec').onclick = ()=>{
 $('bStop').onclick = ()=>{ if (rec) rec.stop(); else setStatus('녹음 중이 아니에요.'); };
 
 // --- 한자 조회 (내장 사전, 무료) ---
-let CH = null, WD = null, RELIDX = null;
+let CH = null, WD = null, RELIDX = null, GR = null; const GRADE_OF = {};
 const dictReady = Promise.all([
-  fetch('dict/chars.json').then(r=>r.json()), fetch('dict/words.json').then(r=>r.json())
-]).then(([c,w])=>{ CH = c; WD = w; setStatus(''); });
+  fetch('dict/chars.json').then(r=>r.json()), fetch('dict/words.json').then(r=>r.json()), fetch('dict/grades.json').then(r=>r.json())
+]).then(([c,w,g])=>{ CH = c; WD = w; GR = g; for (const k in g) for (const x of g[k]) GRADE_OF[x.h] = +k; setStatus(''); });
 setStatus('사전을 불러오는 중…');
 
 
@@ -194,7 +201,7 @@ const EMO = {一:'1️⃣',二:'2️⃣',三:'3️⃣',四:'4️⃣',五:'5️�
 立:'🧍',休:'🛌',玉:'💎',卵:'🥚',乳:'🥛',菜:'🥬',桃:'🍑',栗:'🌰',梨:'🍐',鷄:'🐔',豚:'🐷',象:'🐘',熊:'🐻',鹿:'🦌',兎:'🐰',蛇:'🐍',蝶:'🦋',蜂:'🐝',
 太:'☀️',陽:'☀️',弟:'🧒',兄:'🧑',姉:'👧',妹:'👧',冊:'📕',本:'📘',雞:'🐔',魚:'🐟',鐵:'🔩',銀:'🥈',燈:'💡',橋:'🌉',寺:'🛕',病:'🤒',藥:'💊',醫:'🩺',
 先:'👩‍🏫',線:'〰️',畫:'🖼️',紙:'📃',旗:'🚩',球:'⚽',野:'🏞️',牛:'🐮',茶:'🍵',酒:'🍶',茶:'🍵',雷:'⚡',虹:'🌈',島:'🏝️',港:'⚓',城:'🏰','樹':'🌳',
-'眼':'👁️','髮':'💇','足':'🦶','指':'☝️','身':'🧍','體':'🧍'};
+'眼':'👁️',東:'🌅',西:'🌇',南:'🧭',北:'🧭',敎:'👩‍🏫',軍:'🪖',萬:'🔢',民:'👥',室:'🛋️',長:'📏',寸:'📏',江:'🏞️',空:'🌌',氣:'💨',記:'📝',農:'🧑‍🌾',答:'💬',動:'🏃',每:'🔁',名:'🏷️',物:'📦',方:'🧭',不:'🚫',事:'💼',姓:'📛',世:'🌐',市:'🏪',安:'😌',午:'🕛',自:'🙋',場:'🏟️',前:'⏩',全:'💯',正:'✅',直:'📏',平:'⚖️',漢:'🏯',活:'🏃‍♂️',孝:'🙇',後:'⏪',同:'🤝',洞:'🕳️',登:'🧗',來:'👋',里:'🏘️',面:'🙂',命:'❤️‍🔥',問:'❓',夫:'👫',算:'🧮',少:'🤏',所:'📍',數:'🔢',植:'🌱',有:'✅',育:'🍼',邑:'🏘️',入:'➡️',祖:'👵',住:'🏡',重:'🏋️',千:'🔢',村:'🏘️',出:'🚪',夏:'🏖️',各:'👥',角:'📐',界:'🌐',計:'🧮',高:'🗼',公:'🏛️',共:'🤝',功:'🏆',科:'🔬',今:'⏱️',急:'🚨',短:'📏',堂:'🏛️',代:'🔄',對:'🆚',圖:'🗺️',讀:'📖',童:'🧒',等:'🥇',利:'💰',理:'🧠',明:'💡',聞:'👂',半:'➗',反:'🔄',班:'👨‍👩‍👧‍👦',發:'🚀',放:'🕊️',部:'🧩',分:'✂️',社:'🏢',成:'🏗️',省:'🔍',消:'🧯',術:'🎩',始:'🏁',神:'🙏',信:'✉️',新:'🆕',弱:'🥀',業:'💼',勇:'🦁',用:'🔧',運:'🚚',飮:'🥤',意:'💭',作:'✍️',昨:'⏮️',才:'🌟',戰:'⚔️',庭:'🏡',第:'🥇',題:'📝',注:'💧',集:'🧲',窓:'🪟',淸:'✨',表:'📊',幸:'😊',現:'👀',形:'🔷',和:'☮️',會:'👥',感:'🥰',強:'💪',開:'🔓',京:'🏙️',古:'🏺',苦:'😣',交:'✖️',區:'🗾',郡:'🏘️',根:'🌱',近:'📍',級:'🪜',多:'➕',待:'⏳',度:'🌡️',頭:'🙆',例:'📋',禮:'🙇',路:'🛣️',綠:'🟩',李:'🍑',美:'🌸',番:'🔢',別:'↔️',服:'👗',使:'📨',席:'💺',速:'⚡',孫:'👶',習:'✏️',勝:'🏆',失:'😢',洋:'🌊',英:'🇬🇧',永:'♾️',溫:'♨️',園:'🌳',遠:'🔭',油:'🛢️',者:'🧑',在:'📍',定:'📌',族:'👨‍👩‍👧‍👦',晝:'🌞',親:'👪',通:'🔗',特:'⭐',合:'🧩',向:'🧭',號:'🔔',訓:'🧑‍🏫','髮':'💇','足':'🦶','指':'☝️','身':'🧍','體':'🧍'};
 const EMO_WORD = {學校:'🏫',學生:'🧑‍🎓',先生:'👩‍🏫',大韓民國:'🇰🇷',太陽:'☀️',電話:'📞',自動車:'🚗',汽車:'🚂',飛行機:'✈️',地球:'🌍',火山:'🌋',
  海水:'🌊',花草:'🌺',登山:'🥾',食堂:'🍽️',冊床:'📚',時計:'⏰',男女:'👫',父母:'👨‍👩‍👧',兄弟:'👬',人間:'🧑‍🤝‍🧑',愛人:'💑',韓食:'🍲',音樂:'🎵',
  國旗:'🚩',雪山:'🏔️',白雪:'⛄',天氣:'🌤️',火災:'🧯',洪水:'🌊',銀行:'🏦',病院:'🏥',藥局:'💊',警察:'👮',學院:'🏫',敎室:'🏫',運動:'🏃'};
@@ -209,7 +216,7 @@ const isH = c => /[\u3400-\u9fff]/.test(c);
 
 // 한자 한 글자의 (훈, 음): 읽기와 맞는 음을 우선
 function charInfo(h, eum){
-  const list = CH[h] || [];
+  const list = [...(gradeMeaning(h)||[]), ...(CH[h]||[])];
   const m = list.find(x => x.endsWith(' ' + eum)) || list[0];
   if (!m) return { hanja:h, hun:'', eum: eum||'' };
   const i = m.lastIndexOf(' ');
@@ -235,7 +242,7 @@ function render(reading, forms, idx=0){
   const info = [...word].map((h,i)=>charInfo(h, syl[i]));
   const big = $('big'); big.className = ''; big.textContent = word; $('pic').textContent = pic(word);
   $('reading').textContent = reading;
-  $('chars').innerHTML = info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.hun)} ${esc(c.eum)}</div>`).join('');
+  $('chars').innerHTML = info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.hun)} ${esc(c.eum)}${GRADE_OF[c.hanja]?`<br>${GRADE_OF[c.hanja]}급`:''}</div>`).join('');
   const rel = related(word, reading);
   $('info').innerHTML = `<h2>뜻과 쓰임</h2>
     <div class="tag">뜻풀이 (글자별 훈·음)</div>
@@ -265,9 +272,9 @@ function lookupHanja(t){
   if (!REV){ REV = {}; for (const [k,v] of Object.entries(WD)) for (const h of v) (REV[h] ||= k); }
   if (hs.length > 1 && REV[t]) return render(REV[t], WD[REV[t]], WD[REV[t]].indexOf(t));
   const big = $('big'); big.className=''; big.textContent = t; $('pic').textContent = pic(t);
-  const info = hs.map(h=>({hanja:h, list: CH[h]||[]}));
-  $('reading').textContent = hs.length===1 ? (CH[t]||[]).map(x=>x.slice(x.lastIndexOf(' ')+1)).filter((v,i,a)=>a.indexOf(v)===i).join(' · ') : '';
-  $('chars').innerHTML = hs.length>1 ? info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.list[0]||'')}</div>`).join('') : '';
+  const info = hs.map(h=>({hanja:h, list: gradeMeaning(h) || CH[h]||[]}));
+  $('reading').innerHTML = hs.length===1 ? esc((CH[t]||[]).map(x=>x.slice(x.lastIndexOf(' ')+1)).filter((v,i,a)=>a.indexOf(v)===i).join(' · ')) + badge(t) : '';
+  $('chars').innerHTML = hs.length>1 ? info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.list[0]||'')}${GRADE_OF[c.hanja]?`<br>${GRADE_OF[c.hanja]}급`:''}</div>`).join('') : '';
   let rel = [];
   if (hs.length === 1){
     for (const [k,v] of Object.entries(WD)){ const h = v.find(x=>x.includes(t) && x.length===2); if (h) { rel.push([k,h]); if (rel.length>=300) break; } }
@@ -277,6 +284,19 @@ function lookupHanja(t){
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>: ${c.list.length ? c.list.map(esc).join(' / ') : '사전에 없는 글자'}`).join('<br>')}</p>
     ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
 }
+
+function gradeMeaning(h){ for (const k in GR){ const x = GR[k].find(y=>y.h===h); if (x) return x.m; } return null; }
+const badge = h => GRADE_OF[h] ? `<span class="badge">${GRADE_OF[h]}급</span>` : '';
+
+function showGrade(g){
+  const list = GR[g] || [];
+  $('big').className=''; $('big').textContent = `${g}급`; $('pic').textContent = '';
+  $('reading').textContent = `${list.length}자 · 눌러서 보기`; $('chars').innerHTML = '';
+  $('info').innerHTML = `<h2>${g}급 한자 (${list.length}자)</h2><div class="gchips">${list.map(x=>`<button class="gc" data-h="${x.h}">${x.h}<i>${pic(x.h)}</i><small>${esc(x.m[0])}</small></button>`).join('')}</div>`;
+  $('info').querySelectorAll('.gc').forEach(b=> b.onclick = ()=>{ lookup(b.dataset.h); });
+  document.querySelectorAll('#grades .seg').forEach(x=>x.classList.toggle('on', x.dataset.g===String(g)));
+}
+document.querySelectorAll('#grades .seg').forEach(b=> b.onclick = async ()=>{ await dictReady; showGrade(b.dataset.g); });
 
 function found(t){ return !!(WD && WD[clean(t)]) ; }
 
