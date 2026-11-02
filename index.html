@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>한자 찾기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Noto+Serif+TC:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f6f1e7;--panel:#fffdf8;--ink:#23201b;--mute:#7a7266;--line:#ddd3c0;--accent:#b3261e;--accent2:#2d5a4a}
+  @media (prefers-color-scheme:dark){:root{--bg:#171512;--panel:#201d19;--ink:#efe8da;--mute:#a39a8a;--line:#3a352d;--accent:#ef7b72;--accent2:#7fc4a8}}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Noto Serif KR",serif;padding:12px}
+  .app{height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;min-height:0;display:flex;flex-direction:column}
+  .left{grid-row:1/3}
+  h2{margin:0 0 8px;font-size:13px;color:var(--mute);font-weight:400;letter-spacing:.08em}
+  #pad{flex:1;min-height:0;position:relative;border:1px dashed var(--line);border-radius:10px;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:50% 50%;background-position:center}
+  canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  #hint{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);pointer-events:none;font-size:15px}
+  .cands{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;min-height:34px}
+  .chip{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:4px 12px;font:inherit;font-size:14px;cursor:pointer}
+  .chip:hover{border-color:var(--accent)}
+  .bar{display:flex;gap:8px;margin-top:10px}
+  button.btn{flex:1;padding:12px 8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:15px;cursor:pointer}
+  button.btn:hover{border-color:var(--accent)}
+  button.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.btn.clear{flex:0 0 auto;color:var(--mute)}
+  #status{font-size:12px;color:var(--mute);margin-top:6px;min-height:16px}
+  .hanja{align-items:center;justify-content:center;text-align:center}
+  #big{font-family:"Noto Serif TC","Noto Serif KR",serif;font-weight:500;font-size:clamp(56px,13vw,150px);line-height:1.1;letter-spacing:.04em;color:var(--accent);word-break:keep-all}
+  #reading{font-size:20px;margin-top:6px}
+  #chars{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:13px;color:var(--mute)}
+  #chars b{font-family:"Noto Serif TC",serif;font-size:20px;color:var(--ink);font-weight:500}
+  .info{overflow:auto}
+  .info p{margin:0 0 10px;line-height:1.7;font-size:15px}
+  .info ul{margin:0 0 10px;padding-left:20px;line-height:1.8;font-size:15px}
+  .tag{font-size:12px;color:var(--accent2);margin-bottom:2px}
+  .placeholder{color:var(--mute)}
+  .loading{animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  @media (max-width:720px){
+    body{padding:8px}.app{grid-template-columns:1fr;grid-template-rows:1.3fr .8fr 1fr;gap:8px}.left{grid-row:auto}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="panel left">
+    <h2>필기 · 음성 입력</h2>
+    <div id="pad"><canvas id="cv"></canvas><div id="hint">여기에 한글 낱말을 써 보세요 (예: 학교)</div></div>
+    <div class="cands" id="cands"></div>
+    <div id="status"></div>
+    <div class="bar">
+      <button class="btn" id="bWrite">✍️ 필기</button>
+      <button class="btn" id="bRec">🎙️ 녹음</button>
+      <button class="btn" id="bStop">⏹ 중지</button>
+      <button class="btn clear" id="bClear" title="지우기">지우기</button>
+    </div>
+  </section>
+
+  <section class="panel hanja">
+    <div id="big" class="placeholder">漢字</div>
+    <div id="reading"></div>
+    <div id="chars"></div>
+  </section>
+
+  <section class="panel info" id="info">
+    <h2>뜻과 쓰임</h2>
+    <p class="placeholder">필기하거나 말하면 한자의 뜻과 쓰임이 여기에 나옵니다.</p>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+let strokes = [], cur = null, t0 = 0, drawing = false;
+
+function fit(){
+  const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+  cv.width = r.width * d; cv.height = r.height * d;
+  ctx.setTransform(d,0,0,d,0,0); redraw();
+}
+function redraw(){
+  const r = cv.getBoundingClientRect();
+  ctx.clearRect(0,0,r.width,r.height);
+  ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = getComputedStyle(document.body).color;
+  for (const s of strokes){
+    ctx.beginPath();
+    s[0].forEach((x,i)=> i ? ctx.lineTo(x,s[1][i]) : ctx.moveTo(x,s[1][i]));
+    if (s[0].length === 1) ctx.lineTo(s[0][0]+.1, s[1][0]);
+    ctx.stroke();
+  }
+}
+addEventListener('resize', fit); fit();
+
+function pos(e){ const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+cv.addEventListener('pointerdown', e=>{
+  cv.setPointerCapture(e.pointerId); drawing = true; $('hint').style.display = 'none';
+  if (!t0) t0 = performance.now();
+  const [x,y] = pos(e); cur = [[x],[y],[Math.round(performance.now()-t0)]]; strokes.push(cur); redraw();
+});
+cv.addEventListener('pointermove', e=>{
+  if (!drawing) return;
+  const [x,y] = pos(e); cur[0].push(x); cur[1].push(y); cur[2].push(Math.round(performance.now()-t0)); redraw();
+});
+['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, ()=>{ drawing = false; }));
+
+function clearPad(){ strokes = []; t0 = 0; redraw(); $('hint').style.display = ''; $('cands').innerHTML = ''; }
+$('bClear').onclick = clearPad;
+
+function setStatus(s){ $('status').textContent = s || ''; }
+
+// --- 필기 인식 ---
+$('bWrite').onclick = async ()=>{
+  if (!strokes.length){ setStatus('먼저 왼쪽 칸에 글씨를 써 주세요.'); return; }
+  setStatus('필기를 인식하는 중…');
+  const r = cv.getBoundingClientRect();
+  try{
+    const res = await fetch('https://inputtools.google.com/request?itc=ko-t-i0-handwrit&app=hanja',{method:'POST',headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({options:'enable_pre_space',requests:[{writing_guide:{writing_area_width:Math.round(r.width),writing_area_height:Math.round(r.height)},ink:strokes,language:'ko',max_num_results:8}]})});
+    const raw = await res.json();
+    if (raw[0] !== 'SUCCESS') throw new Error('인식 실패');
+    const data = { candidates: raw[1]?.[0]?.[1] || [] };
+    const c = data.candidates || [];
+    $('cands').innerHTML = '';
+    c.forEach(w=>{ const b = document.createElement('button'); b.className='chip'; b.textContent = w; b.onclick = ()=>lookup(w); $('cands').appendChild(b); });
+    await dictReady; const pick = c.find(found) || c.find(x=>clean(x)) || c[0];
+    if (pick){ setStatus(`인식: ${pick}`); lookup(pick); } else setStatus('글씨를 알아보지 못했어요. 다시 써 주세요.');
+  }catch(e){ setStatus('오류: ' + e.message); }
+};
+
+// --- 음성 인식 ---
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, finalText = '';
+$('bRec').onclick = ()=>{
+  if (!SR){ setStatus('이 브라우저는 음성 인식을 지원하지 않아요. 크롬/엣지/사파리를 써 주세요.'); return; }
+  if (rec) return;
+  rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = true; rec.continuous = false; finalText = '';
+  rec.onstart = ()=>{ $('bRec').classList.add('on'); $('bRec').textContent = '🎙️ 듣는 중…'; setStatus('말씀하세요…'); };
+  rec.onresult = e=>{
+    let t = ''; for (const r of e.results){ t += r[0].transcript; if (r.isFinal) finalText = t; }
+    setStatus('듣는 중: ' + t);
+  };
+  rec.onerror = e=> setStatus('음성 오류: ' + e.error);
+  rec.onend = ()=>{
+    $('bRec').classList.remove('on'); $('bRec').textContent = '🎙️ 녹음'; rec = null;
+    const w = finalText.trim();
+    if (w){ setStatus(`인식: ${w}`); lookup(w); }
+  };
+  rec.start();
+};
+$('bStop').onclick = ()=>{ if (rec) rec.stop(); else setStatus('녹음 중이 아니에요.'); };
+
+// --- 한자 조회 (내장 사전, 무료) ---
+let CH = null, WD = null, RELIDX = null;
+const dictReady = Promise.all([
+  fetch('dict/chars.json').then(r=>r.json()), fetch('dict/words.json').then(r=>r.json())
+]).then(([c,w])=>{ CH = c; WD = w; setStatus(''); });
+setStatus('사전을 불러오는 중…');
+
+const clean = t => t.replace(/[^\uAC00-\uD7A3\u3400-\u9FFF]/g,'');
+const isH = c => /[\u3400-\u9fff]/.test(c);
+
+// 한자 한 글자의 (훈, 음): 읽기와 맞는 음을 우선
+function charInfo(h, eum){
+  const list = CH[h] || [];
+  const m = list.find(x => x.endsWith(' ' + eum)) || list[0];
+  if (!m) return { hanja:h, hun:'', eum: eum||'' };
+  const i = m.lastIndexOf(' ');
+  return { hanja:h, hun:m.slice(0,i), eum:m.slice(i+1) };
+}
+// 같은 한자가 들어 있는 다른 낱말 (2글자 우선)
+function related(word, reading){
+  if (!RELIDX){ RELIDX = Object.entries(WD).map(([k,v])=>[k,v[0]]); }
+  const set = new Set([...word]);
+  const out = [];
+  for (const [k,h] of RELIDX){
+    if (h === word || k === reading) continue;
+    if (h.length === 2 && [...h].some(c=>set.has(c))) { out.push([k,h]); if (out.length >= 400) break; }
+  }
+  // 앞에서부터 6개를 고르되 다양하게 섞기
+  const step = Math.max(1, Math.floor(out.length / 6));
+  return out.filter((_,i)=> i % step === 0).slice(0,6);
+}
+
+function render(reading, forms, idx=0){
+  const word = forms[idx];
+  const syl = [...reading];
+  const info = [...word].map((h,i)=>charInfo(h, syl[i]));
+  const big = $('big'); big.className = ''; big.textContent = word;
+  $('reading').textContent = reading;
+  $('chars').innerHTML = info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.hun)} ${esc(c.eum)}</div>`).join('');
+  const rel = related(word, reading);
+  $('info').innerHTML = `<h2>뜻과 쓰임</h2>
+    <div class="tag">뜻풀이 (글자별 훈·음)</div>
+    <p>${info.map(c=>`<b>${esc(c.hanja)}</b>(${esc(c.hun)} ${esc(c.eum)})`).join(' + ')}<br>
+    → <b>${esc(reading)}</b> = ${info.map(c=>esc(c.hun||c.eum)).join(' · ')}</p>
+    ${forms.length>1 ? `<div class="tag">같은 소리의 다른 한자어</div><div class="cands">${forms.map((f,i)=>`<button class="chip" data-i="${i}" ${i===idx?'style="border-color:var(--accent)"':''}>${esc(f)}</button>`).join('')}</div>`:''}
+    ${rel.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
+  $('info').querySelectorAll('[data-i]').forEach(b=> b.onclick = ()=>render(reading, forms, +b.dataset.i));
+}
+
+function renderChars(syl){
+  const list = CH ? Object.entries(CH).filter(([h,v])=>v.some(x=>x.endsWith(' '+syl))) : [];
+  $('big').className=''; $('big').textContent = list[0]?.[0] || '?';
+  $('reading').textContent = syl;
+  $('chars').innerHTML = '';
+  $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">'${esc(syl)}' 음을 가진 한자</div>
+    <div class="cands">${list.slice(0,60).map(([h,v])=>`<button class="chip" data-h="${h}" title="${esc(v.join(', '))}">${h} ${esc(v.find(x=>x.endsWith(' '+syl)))}</button>`).join('')}</div>`;
+  $('info').querySelectorAll('[data-h]').forEach(b=> b.onclick = ()=>{
+    const h=b.dataset.h; $('big').textContent=h;
+    $('chars').innerHTML = (CH[h]||[]).map(x=>`<div>${esc(x)}</div>`).join('');
+  });
+}
+
+function found(t){ return !!(WD && WD[clean(t)]) ; }
+
+async function lookup(text){
+  await dictReady;
+  const t = clean(text);
+  if (!t){ setStatus('글자를 알아보지 못했어요.'); return; }
+  if (WD[t]) return render(t, WD[t]);
+  if ([...t].length === 1) return renderChars(t);
+  // 문장이면 가장 긴 낱말부터 찾기
+  const chars = [...t];
+  for (let len = Math.min(6, chars.length); len >= 2; len--){
+    for (let i = 0; i + len <= chars.length; i++){
+      const sub = chars.slice(i,i+len).join('');
+      if (WD[sub]) { setStatus(`'${t}'에서 '${sub}'을(를) 찾았어요.`); return render(sub, WD[sub]); }
+    }
+  }
+  $('big').className='placeholder'; $('big').textContent='?'; $('reading').textContent=t; $('chars').innerHTML='';
+  $('info').innerHTML = '<h2>뜻과 쓰임</h2><p>사전에서 찾지 못했어요. 한자어가 아니거나 철자가 다를 수 있어요. 한 글자씩 써서 음에 맞는 한자를 찾아보세요.</p>';
+}
+function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+</script>
+</body>
+</html>
