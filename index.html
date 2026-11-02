@@ -181,20 +181,22 @@ $('bWrite').onclick = async ()=>{
 
 // --- 음성 인식 ---
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, finalText = '';
+let rec = null, finalText = '', alts = [];
 $('bRec').onclick = ()=>{
   if (!SR){ setStatus('이 브라우저는 음성 인식을 지원하지 않아요. 크롬/엣지/사파리를 써 주세요.'); return; }
   if (rec) return;
-  rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = true; rec.continuous = false; finalText = '';
+  rec = new SR(); rec.lang = 'ko-KR'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 5; finalText = ''; alts = [];
   rec.onstart = ()=>{ $('bRec').classList.add('on'); $('bRec').textContent = '🎙️ 듣는 중…'; setStatus('말씀하세요…'); };
   rec.onresult = e=>{
-    let t = ''; for (const r of e.results){ t += r[0].transcript; if (r.isFinal) finalText = t; }
+    let t = ''; for (const r of e.results){ t += r[0].transcript; if (r.isFinal){ finalText = t; alts = [...r].map(a=>a.transcript); } }
     setStatus('듣는 중: ' + t);
   };
   rec.onerror = e=> setStatus('음성 오류: ' + e.error);
-  rec.onend = ()=>{
+  rec.onend = async ()=>{
     $('bRec').classList.remove('on'); $('bRec').textContent = '🎙️ 녹음'; rec = null;
-    const w = finalText.trim();
+    await dictReady;
+    const cand = [finalText, ...alts].map(x=>x.trim()).filter(Boolean);
+    const w = cand.find(x=>{ const c = clean(x); return c && ([...c].every(isH) || findMatch(c)); }) || cand[0];
     if (w){ setStatus(`인식: ${w}`); lookup(w); }
   };
   rec.start();
@@ -274,18 +276,14 @@ function render(reading, forms, idx=0){
 }
 
 function renderChars(syl){
-  const list = CH ? Object.entries(CH).filter(([h,v])=>v.some(x=>x.endsWith(' '+syl))) : [];
+  const list = CH ? Object.entries(CH).filter(([h,v])=>v.some(x=>x.endsWith(' '+syl))).sort((x,y)=>(GRADE_OF[y[0]]||0)-(GRADE_OF[x[0]]||0)) : [];
   $('big').className=''; $('big').textContent = list[0]?.[0] || '?'; $('pic').textContent = pic(list[0]?.[0]||'');
   $('reading').textContent = syl; say(syl);
   $('chars').innerHTML = '';
   $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">'${esc(syl)}' 음을 가진 한자</div>
     <div class="cands">${list.slice(0,60).map(([h,v])=>`<button class="chip" data-h="${h}" title="${esc(v.join(', '))}">${h} ${esc(v.find(x=>x.endsWith(' '+syl)))}</button>`).join('')}</div>`;
-  $('info').querySelectorAll('[data-h]').forEach(b=> b.onclick = ()=>{
-    const h=b.dataset.h; $('big').textContent=h; $('pic').textContent=pic(h);
-    $('chars').innerHTML = (CH[h]||[]).map(x=>`<div>${esc(x)}</div>`).join('');
-  });
+  $('info').querySelectorAll('[data-h]').forEach(b=> b.onclick = ()=> lookupHanja(b.dataset.h));
 }
-
 let REV = null;
 function lookupHanja(t){
   const hs = [...t];
@@ -320,27 +318,55 @@ document.querySelectorAll('#grades .seg').forEach(b=> b.onclick = async ()=>{ aw
 
 function found(t){ return !!(WD && WD[clean(t)]) ; }
 
+// "물 수"처럼 훈·음으로 말하면 한자를 찾는 색인 (급수 한자 우선)
+let HE = null;
+function buildHE(){
+  HE = {};
+  const add = (h,m)=>{ const k = m.replace(/\[[^\]]*\]|\([^)]*\)/g,'').replace(/[^\uAC00-\uD7A3]/g,''); if (k.length < 2) return; const a = (HE[k] ||= []); if (!a.includes(h)) a.push(h); };
+  for (const [h,v] of Object.entries(CH)) v.forEach(m=>add(h,m));
+  for (const g in GR) GR[g].forEach(x=>x.m.forEach(m=>add(x.h,m)));
+  for (const k in HE) HE[k].sort((x,y)=>(GRADE_OF[y]||0)-(GRADE_OF[x]||0));
+}
+// 입력(한글)에서 한자 찾기: 훈·음 → 낱말 → 한 글자 음 → 문장 속 부분
+function findMatch(t){
+  if (!HE) buildHE();
+  if (HE[t]) return {kind:'he', hs:HE[t], key:t};
+  if (WD[t]) return {kind:'word', key:t};
+  const chars = [...t];
+  if (chars.length === 1) return {kind:'syl', key:t};
+  for (let len = Math.min(8, chars.length - 1); len >= 2; len--){
+    for (let i = 0; i + len <= chars.length; i++){
+      const sub = chars.slice(i,i+len).join('');
+      if (HE[sub]) return {kind:'he', hs:HE[sub], key:sub, from:t};
+      if (WD[sub] && sub.length * 2 >= t.length) return {kind:'word', key:sub, from:t};
+    }
+  }
+  return null;
+}
 async function lookup(text){
   await dictReady;
   const t = clean(text);
   if (!t){ setStatus('글자를 알아보지 못했어요.'); return; }
   if ([...t].every(isH)) return lookupHanja(t);
-  if (WD[t]) return render(t, WD[t]);
-  if ([...t].length === 1) return renderChars(t);
-  // 문장이면 가장 긴 낱말부터 찾기
-  const chars = [...t];
-  for (let len = Math.min(6, chars.length); len >= 2; len--){
-    for (let i = 0; i + len <= chars.length; i++){
-      const sub = chars.slice(i,i+len).join('');
-      if (WD[sub]) { setStatus(`'${t}'에서 '${sub}'을(를) 찾았어요.`); return render(sub, WD[sub]); }
+  const m = findMatch(t);
+  if (m){
+    if (m.from) setStatus(`'${m.from}'에서 '${m.key}'을(를) 찾았어요.`);
+    if (m.kind === 'he'){
+      if (m.hs.length > 1){
+        $('cands').innerHTML = '';
+        m.hs.slice(0,8).forEach(h=>{ const b = document.createElement('button'); b.className='chip'; b.textContent = h; b.onclick = ()=>lookupHanja(h); $('cands').appendChild(b); });
+      }
+      return lookupHanja(m.hs[0]);
     }
+    if (m.kind === 'word') return render(m.key, WD[m.key]);
+    return renderChars(m.key);
   }
   $('big').className='placeholder'; $('big').textContent='?'; $('pic').textContent=''; $('reading').textContent=t; $('chars').innerHTML='';
-  $('info').innerHTML = '<h2>뜻과 쓰임</h2><p>사전에서 찾지 못했어요. 한자어가 아니거나 철자가 다를 수 있어요. 한 글자씩 써서 음에 맞는 한자를 찾아보세요.</p>';
+  $('info').innerHTML = '<h2>뜻과 쓰임</h2><p>사전에서 찾지 못했어요. 「물 수」「사람 인」처럼 <b>뜻과 소리</b>로 말하거나, 「학교」 같은 낱말로 말해 보세요.</p>';
 }
+
 function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-// 한자 길이·칸 크기에 맞춰 글자 크기 자동 조절
 // --- 읽어주기 (기기 기본 목소리) ---
 let lastSay = '';
 function say(text){
