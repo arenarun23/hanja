@@ -174,6 +174,10 @@ $('bWrite').onclick = async ()=>{
     const hit = c.find(known);
     const pick = hit || c.find(x=>clean(x)) || c[0];
     if (!pick){ setStatus('글씨를 알아보지 못했어요. 다시 써 주세요.'); return; }
+    if (mode === 'zh' && hit !== c[0]){
+      const items = [...new Set(c.flatMap(x=>[...x]).filter(h=>CH[h]))].slice(0,6).map(h=>({h, label: mainMeaning(h)}));
+      if (items.length){ setStatus(`인식: ${c[0] || ''}`); return similarFlow(items); }
+    }
     setStatus(`인식: ${pick}` + (hit ? '' : mode==='ko' ? ' (사전에 없어요. 한자를 쓰셨다면 「漢字」 모드로 바꿔 보세요)' : ' (사전에 없는 글자예요)'));
     lookup(pick);
   }catch(e){ setStatus('오류: ' + e.message); }
@@ -337,14 +341,14 @@ function findMatch(t){
   for (let len = Math.min(8, chars.length - 1); len >= 2; len--){
     for (let i = 0; i + len <= chars.length; i++){
       const sub = chars.slice(i,i+len).join('');
-      if (HE[sub]) return {kind:'he', hs:HE[sub], key:sub, from:t};
+      if (HE[sub] && (sub.length >= 3 || sub.length * 2 >= t.length)) return {kind:'he', hs:HE[sub], key:sub, from:t};
       if (WD[sub] && sub.length * 2 >= t.length) return {kind:'word', key:sub, from:t};
     }
   }
   return null;
 }
 async function lookup(text){
-  await dictReady;
+  await dictReady; seq++;
   const t = clean(text);
   if (!t){ setStatus('글자를 알아보지 못했어요.'); return; }
   if ([...t].every(isH)) return lookupHanja(t);
@@ -361,8 +365,67 @@ async function lookup(text){
     if (m.kind === 'word') return render(m.key, WD[m.key]);
     return renderChars(m.key);
   }
+  const sim = similarItems(t);
+  if (sim.length) return similarFlow(sim);
   $('big').className='placeholder'; $('big').textContent='?'; $('pic').textContent=''; $('reading').textContent=t; $('chars').innerHTML='';
   $('info').innerHTML = '<h2>뜻과 쓰임</h2><p>사전에서 찾지 못했어요. 「물 수」「사람 인」처럼 <b>뜻과 소리</b>로 말하거나, 「학교」 같은 낱말로 말해 보세요.</p>';
+}
+
+// --- 정확한 한자를 못 찾았을 때: 비슷한 한자 안내 ---
+let seq = 0; // 새 조회/읽기가 시작되면 진행 중인 안내를 멈춘다
+const mainMeaning = h => (gradeMeaning(h) || CH[h] || [''])[0];
+function lev1(a,b){
+  if (a === b) return true;
+  const la = a.length, lb = b.length; if (Math.abs(la-lb) > 1) return false;
+  let i = 0; while (i < la && i < lb && a[i] === b[i]) i++;
+  if (la === lb) return a.slice(i+1) === b.slice(i+1);
+  return la > lb ? a.slice(i+1) === b.slice(i) : b.slice(i+1) === a.slice(i);
+}
+function similarItems(t){
+  if (!HE) buildHE();
+  const out = [], seen = new Set();
+  const push = (h,label)=>{ if (h && !seen.has(h) && out.length < 6){ seen.add(h); out.push({h, label}); } };
+  const near = [];
+  for (const k in HE){ if (lev1(k,t)) near.push(HE[k][0]); }
+  near.sort((x,y)=>(GRADE_OF[y]||0)-(GRADE_OF[x]||0)).slice(0,4).forEach(h=>push(h, mainMeaning(h)));
+  let n = 0;
+  if (t.length >= 2){ n = 0; for (const k in WD){ if (Math.abs(k.length - t.length) <= 1 && lev1(k,t)){ push(WD[k][0], k); if (++n >= 3) break; } } }
+  for (const syl of [...t].slice(0,2)){   // 글자 소리가 같은 급수 한자
+    const list = Object.entries(CH).filter(([h,v])=>v.some(x=>x.endsWith(' '+syl))).sort((x,y)=>(GRADE_OF[y[0]]||0)-(GRADE_OF[x[0]]||0)).slice(0,2);
+    list.forEach(([h])=>push(h, mainMeaning(h)));
+  }
+  return out;
+}
+function showBig(it){
+  $('big').className=''; $('big').textContent = it.h; $('pic').textContent = pic(it.h);
+  $('reading').textContent = it.label; $('chars').innerHTML = ''; lastSay = it.label;
+}
+function speakThen(text, done){
+  if (!('speechSynthesis' in window)){ setTimeout(done, 1500); return; }
+  let fin = false; const go = ()=>{ if (!fin){ fin = true; done(); } };
+  try{
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; u.rate = +$('rate').value; u.volume = +$('vol').value;
+    u.onend = go; u.onerror = go; setTimeout(go, 3000 + text.length * 450);
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){ go(); }
+}
+const SIMILAR_MSG = '정확한 한자를 찾지 못했어요. 비슷한 한자를 알려드릴게요.';
+function similarFlow(items){
+  const my = ++seq;
+  setStatus('정확한 한자를 찾지 못했어요. 비슷한 한자를 알려드릴게요.');
+  $('big').className='placeholder'; $('big').textContent='?'; $('pic').textContent=''; $('chars').innerHTML='';
+  $('reading').textContent = '비슷한 한자';
+  $('info').innerHTML = `<h2>비슷한 한자</h2><div class="gchips">${items.map(x=>`<button class="gc" data-h="${esc(x.h)}">${esc(x.h)}<i>${pic(x.h)}</i><small>${esc(x.label)}</small></button>`).join('')}</div>`;
+  $('info').querySelectorAll('.gc').forEach(b=> b.onclick = ()=> lookup(b.dataset.h));
+  const steps = items.slice(0,3);
+  speakThen(SIMILAR_MSG, ()=>{
+    const next = i => {
+      if (my !== seq || i >= steps.length) return;
+      showBig(steps[i]);
+      speakThen(steps[i].label, ()=> next(i+1));
+    };
+    next(0);
+  });
 }
 
 function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -370,6 +433,7 @@ function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':
 // --- 읽어주기 (기기 기본 목소리) ---
 let lastSay = '';
 function say(text){
+  seq++;
   lastSay = text || lastSay; if (!lastSay || !('speechSynthesis' in window)) return;
   try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(lastSay); u.lang = 'ko-KR'; u.rate = +$('rate').value; u.volume = +$('vol').value; speechSynthesis.speak(u); }catch(e){}
 }
