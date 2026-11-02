@@ -61,6 +61,10 @@
   .info p{margin:0 0 6px}
   .hrow{cursor:pointer;-webkit-tap-highlight-color:transparent}
   .hrow:active{transform:scale(.97)}
+  .vox{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:18px;color:var(--mute)}
+  .vox label{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .vox input{width:130px;accent-color:var(--accent2);height:28px}
+  .vox b{min-width:2.2em;color:var(--ink)}
   #listen{font-size:18px;color:var(--mute);margin-top:2px;cursor:pointer}
   .tag{font-size:18px;color:var(--accent2);margin-bottom:2px}
   .placeholder{color:var(--mute)}
@@ -91,6 +95,10 @@
     <div class="hrow"><div id="big" class="placeholder">漢字</div><div id="pic"></div></div>
     <div id="reading"></div>
     <div id="listen">🔊 한자를 누르면 읽어줘요</div>
+    <div class="vox">
+      <label>🐢 속도 <input type="range" id="rate" min="0.5" max="1.5" step="0.1" value="0.8"><b id="rateV">0.8</b></label>
+      <label>🔈 크기 <input type="range" id="vol" min="0.2" max="1" step="0.1" value="1"><b id="volV">1.0</b></label>
+    </div>
     <div id="chars"></div>
   </section>
 
@@ -337,8 +345,16 @@ function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':
 let lastSay = '';
 function say(text){
   lastSay = text || lastSay; if (!lastSay || !('speechSynthesis' in window)) return;
-  try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(lastSay); u.lang = 'ko-KR'; speechSynthesis.speak(u); }catch(e){}
+  try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(lastSay); u.lang = 'ko-KR'; u.rate = +$('rate').value; u.volume = +$('vol').value; speechSynthesis.speak(u); }catch(e){}
 }
+// 속도·크기 설정 (이 기기에 기억)
+function loadVox(){ try{ const v = JSON.parse(localStorage.getItem('hanja-vox')||'{}'); if (v.rate) $('rate').value = v.rate; if (v.vol) $('vol').value = v.vol; }catch(e){} showVox(); }
+function showVox(){ $('rateV').textContent = (+$('rate').value).toFixed(1); $('volV').textContent = (+$('vol').value).toFixed(1); }
+['rate','vol'].forEach(id=>{
+  $(id).addEventListener('input', showVox);
+  $(id).addEventListener('change', ()=>{ try{ localStorage.setItem('hanja-vox', JSON.stringify({rate:$('rate').value, vol:$('vol').value})); }catch(e){} say(lastSay || '안녕'); });
+});
+loadVox();
 document.querySelector('.hrow').addEventListener('click', ()=>say());
 $('listen').addEventListener('click', ()=>say());
 
