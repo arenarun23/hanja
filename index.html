@@ -62,6 +62,8 @@
   .info p{margin:0 0 6px}
   .hrow{cursor:pointer;-webkit-tap-highlight-color:transparent}
   .hrow:active{transform:scale(.97)}
+  #vtoggle{display:none;position:absolute;top:6px;right:8px;z-index:3;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;width:36px;height:36px;font-size:18px;cursor:pointer}
+  .hanja{position:relative}
   .vox{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:18px;color:var(--mute)}
   .vox label{display:flex;align-items:center;gap:6px;white-space:nowrap}
   .vox input{width:130px;accent-color:var(--accent2);height:28px}
@@ -75,22 +77,31 @@
   html,body{overscroll-behavior:none}
   #pad,canvas{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .cands{min-height:0}
+  #cands{min-height:42px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  #cands .chip{flex:none}
+  #status{min-height:20px}
   .info > *{flex-shrink:0}   /* 내용이 넘치면 찌그러지지 않고 스크롤 */
   #chars{display:none}   /* 글자별 훈·음은 '뜻과 쓰임' 칸에 이미 나옴 → 한자 칸을 한자에 양보 */
   @media (max-height:800px){ #listen{display:none} }
   @media (max-width:900px){
     body{padding:8px;overflow:hidden}
-    .app{height:calc(100dvh - 16px);grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,50fr) minmax(0,28fr) minmax(0,22fr);gap:8px}
+    .app{height:calc(var(--appH,100dvh) - 16px);grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,55fr) minmax(0,25fr) minmax(0,20fr);gap:8px}
     .left{grid-row:auto}
   }
   @media (max-width:900px) and (max-height:700px){
-    .app{grid-template-rows:minmax(0,46fr) minmax(0,31fr) minmax(0,23fr)}
+    #vtoggle{display:block}
+    .hanja:not(.showvox) .vox{display:none}
+    .hanja.showvox .vox{position:absolute;left:8px;right:52px;top:6px;z-index:3;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px 8px;margin:0}
+    .app{grid-template-rows:minmax(0,54fr) minmax(0,26fr) minmax(0,20fr)}
+    #cands{min-height:34px}
+    .left button.btn{padding:7px 2px}
+    .left .mode{margin-top:4px}
   }
   /* 휴대폰(세로)·낮은 화면: 글자·여백을 줄여 필기 칸 확보 */
   @media (max-width:600px), (max-height:520px){
     .panel{padding:10px;border-radius:12px}
     h2{font-size:14px;margin-bottom:4px}
-    #pad{min-height:150px}
+    #pad{min-height:90px}
     button.btn{font-size:clamp(14px,4.7vw,19px);padding:10px 2px}
     .cands{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;margin-top:6px;scrollbar-width:none}
     .chip{flex:none}
@@ -100,7 +111,10 @@
     .mode{margin-top:6px;gap:4px}
     .mode span{font-size:13px}.mode .gap{margin-left:6px}
     .mode .seg{font-size:16px;padding:2px 8px}
-    #status{font-size:14px;min-height:0;margin-top:4px}
+    .left{position:relative}
+    .left h2{display:none}
+    #status{position:absolute;top:12px;left:16px;right:16px;z-index:2;pointer-events:none;font-size:14px;min-height:0;margin:0;padding:1px 8px;border-radius:8px;background:var(--panel);opacity:.92;width:fit-content;max-width:calc(100% - 32px)}
+    #status:empty{display:none}
     #hint{font-size:16px}
     .chip{font-size:18px;padding:2px 10px}
     #reading{font-size:22px;margin-top:2px}
@@ -134,6 +148,7 @@
     <div class="hrow"><div id="big" class="placeholder">漢字</div><div id="pic"></div></div>
     <div id="reading"></div>
     <div id="listen">🔊 한자를 누르면 읽어줘요</div>
+    <button id="vtoggle" title="읽기 속도·소리 크기">⚙️</button>
     <div class="vox">
       <label>🐢 속도 <input type="range" id="rate" min="0.5" max="1.5" step="0.1" value="0.8"><b id="rateV">0.8</b></label>
       <label>🔈 크기 <input type="range" id="vol" min="0.2" max="1" step="0.1" value="1"><b id="volV">1.0</b></label>
@@ -152,6 +167,9 @@ const $ = (id) => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 let strokes = [], cur = null, t0 = 0, drawing = false;
 
+function setAppH(){ document.documentElement.style.setProperty('--appH', Math.round((window.visualViewport ? visualViewport.height : innerHeight)) + 'px'); }
+setAppH(); addEventListener('resize', setAppH); addEventListener('orientationchange', setAppH);
+window.visualViewport && visualViewport.addEventListener('resize', setAppH);
 const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
 function inkColor(){ return darkMQ.matches ? '#ffffff' : '#1c1a16'; }
 darkMQ.addEventListener && darkMQ.addEventListener('change', ()=>redraw());
@@ -161,8 +179,7 @@ function fit(){
   ctx.setTransform(d,0,0,d,0,0); redraw();
 }
 function redraw(){
-  const r = cv.getBoundingClientRect();
-  ctx.clearRect(0,0,r.width,r.height);
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore();   // 그림판 전체를 지움(화면 크기와 어긋나도 잔상 없음)
   ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.strokeStyle = inkColor();
   for (const s of strokes){
@@ -172,7 +189,10 @@ function redraw(){
     ctx.stroke();
   }
 }
-addEventListener('resize', fit); fit();
+let lastPad = '';
+function fitIfChanged(){ const r = cv.getBoundingClientRect(), k = Math.round(r.width)+'x'+Math.round(r.height)+'@'+(devicePixelRatio||1); if (k !== lastPad){ lastPad = k; fit(); } }
+addEventListener('resize', fitIfChanged); fitIfChanged();
+new ResizeObserver(fitIfChanged).observe($('pad'));
 
 function pos(e){ const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 cv.addEventListener('pointerdown', e=>{
@@ -184,9 +204,15 @@ cv.addEventListener('pointermove', e=>{
   if (!drawing) return;
   const [x,y] = pos(e); cur[0].push(x); cur[1].push(y); cur[2].push(Math.round(performance.now()-t0)); redraw();
 });
-['pointerup','pointercancel'].forEach(ev => cv.addEventListener(ev, ()=>{ drawing = false; }));
+let autoT = null;
+cv.addEventListener('pointerdown', ()=> clearTimeout(autoT));
+cv.addEventListener('pointercancel', ()=>{ drawing = false; });
+cv.addEventListener('pointerup', ()=>{
+  drawing = false; clearTimeout(autoT);
+  autoT = setTimeout(()=>{ if (strokes.length && !drawing) $('bWrite').click(); }, 1300);   // 1.3초 쉬면 자동 인식
+});
 
-function clearPad(){ strokes = []; t0 = 0; redraw(); $('hint').style.display = ''; $('cands').innerHTML = ''; }
+function clearPad(){ clearTimeout(autoT); strokes = []; t0 = 0; redraw(); $('hint').style.display = ''; $('cands').innerHTML = ''; }
 $('bClear').onclick = clearPad;
 
 function setStatus(s){ $('status').textContent = s || ''; }
@@ -248,6 +274,14 @@ $('bRec').onclick = ()=>{
   rec.start();
 };
 $('bStop').onclick = ()=>{ if (rec) rec.stop(); else setStatus('녹음 중이 아니에요.'); };
+
+// 버튼 탭: pointerup 으로 바로 실행하고, 이어서 오는 click 은 무시(키보드 click 은 그대로 동작)
+function onTap(el){
+  const fn = el.onclick; el.onclick = null; let last = 0;
+  el.addEventListener('pointerup', e=>{ if (e.pointerType === 'mouse' && e.button !== 0) return; last = Date.now(); fn.call(el, e); });
+  el.addEventListener('click', e=>{ if (Date.now() - last < 700) return; fn.call(el, e); });
+}
+['bWrite','bRec','bStop','bClear'].forEach(id=> onTap($(id)));
 
 // --- 한자 조회 (내장 사전, 무료) ---
 let CH = null, WD = null, RELIDX = null, GR = null, LV = {};
@@ -490,6 +524,7 @@ function showVox(){ $('rateV').textContent = (+$('rate').value).toFixed(1); $('v
 });
 loadVox();
 document.querySelector('.hrow').addEventListener('click', ()=>say());
+$('vtoggle').addEventListener('click', ()=>{ document.querySelector('.hanja').classList.toggle('showvox'); setTimeout(fitBig, 0); });
 $('listen').addEventListener('click', ()=>say());
 
 function fitBig(){
