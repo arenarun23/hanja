@@ -4,47 +4,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>한자 찾기</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Noto+Serif+TC:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@700&family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#f6f1e7;--panel:#fffdf8;--ink:#23201b;--mute:#7a7266;--line:#ddd3c0;--accent:#b3261e;--accent2:#2d5a4a}
   @media (prefers-color-scheme:dark){:root{--bg:#171512;--panel:#201d19;--ink:#efe8da;--mute:#a39a8a;--line:#3a352d;--accent:#ef7b72;--accent2:#7fc4a8}}
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
-  body{background:var(--bg);color:var(--ink);font-family:"Noto Serif KR",serif;padding:12px}
-  .app{height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:12px}
+  body{background:var(--bg);color:var(--ink);font-family:"Noto Serif KR",serif;font-weight:700;padding:12px}
+  .app{height:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr);gap:12px}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;min-height:0;display:flex;flex-direction:column}
   .left{grid-row:1/3}
-  h2{margin:0 0 8px;font-size:13px;color:var(--mute);font-weight:400;letter-spacing:.08em}
+  h2{margin:0 0 8px;font-size:20px;color:var(--mute);font-weight:700;letter-spacing:.08em}
   #pad{flex:1;min-height:0;position:relative;border:1px dashed var(--line);border-radius:10px;
     background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:50% 50%;background-position:center}
   canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
-  #hint{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);pointer-events:none;font-size:15px}
+  #hint{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);pointer-events:none;font-size:22px}
   .cands{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;min-height:34px}
-  .chip{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:4px 12px;font:inherit;font-size:14px;cursor:pointer}
+  .chip{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:4px 12px;font:inherit;font-size:21px;cursor:pointer}
   .chip:hover{border-color:var(--accent)}
   .bar{display:flex;gap:8px;margin-top:10px}
-  button.btn{flex:1;padding:12px 8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:15px;cursor:pointer}
+  button.btn{flex:1;white-space:nowrap;padding:12px 4px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-size:22px;cursor:pointer}
   button.btn:hover{border-color:var(--accent)}
   button.btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
   button.btn.clear{flex:0 0 auto;color:var(--mute)}
-  .mode{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--mute)}
-  .seg{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:4px 14px;font:inherit;font-size:14px;cursor:pointer}
+  .mode{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:18px;color:var(--mute)}
+  .seg{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:4px 14px;font:inherit;font-size:21px;cursor:pointer}
   .seg.on{background:var(--accent2);border-color:var(--accent2);color:#fff}
-  #status{font-size:12px;color:var(--mute);margin-top:6px;min-height:16px}
+  #status{font-size:18px;color:var(--mute);margin-top:6px;min-height:16px}
   .hanja{align-items:center;justify-content:center;text-align:center}
-  #big{font-family:"Noto Serif TC","Noto Serif KR",serif;font-weight:500;font-size:clamp(56px,13vw,150px);line-height:1.1;letter-spacing:.04em;color:var(--accent);word-break:keep-all}
-  #reading{font-size:20px;margin-top:6px}
-  #chars{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:13px;color:var(--mute)}
-  #chars b{font-family:"Noto Serif TC",serif;font-size:20px;color:var(--ink);font-weight:500}
+  #big{font-family:"Noto Serif TC","Noto Serif KR",serif;font-weight:700;font-size:clamp(84px,19vw,225px);line-height:1.1;letter-spacing:.04em;color:var(--accent);word-break:keep-all}
+  .hrow{display:flex;align-items:center;justify-content:center;gap:.2em;flex-wrap:nowrap;white-space:nowrap;font-size:120px;max-width:100%}
+  .hrow #big{font-size:1em}
+  #pic{font-size:.6em;flex:none;line-height:1;min-height:0}
+  #pic:empty{display:none}
+  .info li small{font-size:.8em;color:var(--mute)}
+  #reading{font-size:30px;margin-top:6px}
+  #chars{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:20px;color:var(--mute)}
+  #chars b{font-family:"Noto Serif TC",serif;font-size:30px;color:var(--ink);font-weight:500}
   .info{overflow:auto}
-  .info p{margin:0 0 10px;line-height:1.7;font-size:15px}
-  .info ul{margin:0 0 10px;padding-left:20px;line-height:1.8;font-size:15px}
-  .tag{font-size:12px;color:var(--accent2);margin-bottom:2px}
+  .info p{margin:0 0 10px;line-height:1.7;font-size:22px}
+  .info ul{margin:0 0 10px;padding-left:20px;line-height:1.8;font-size:22px}
+  .tag{font-size:18px;color:var(--accent2);margin-bottom:2px}
   .placeholder{color:var(--mute)}
   .loading{animation:pulse 1s infinite}
   @keyframes pulse{50%{opacity:.35}}
-  @media (max-width:720px){
-    body{padding:8px}.app{grid-template-columns:1fr;grid-template-rows:1.3fr .8fr 1fr;gap:8px}.left{grid-row:auto}
+  @media (max-width:900px){
+    body{padding:8px}.app{grid-template-columns:1fr;grid-template-rows:1.7fr 1.1fr 1fr;gap:8px}.left{grid-row:auto}
   }
 </style>
 </head>
@@ -66,7 +71,7 @@
   </section>
 
   <section class="panel hanja">
-    <div id="big" class="placeholder">漢字</div>
+    <div class="hrow"><div id="big" class="placeholder">漢字</div><div id="pic"></div></div>
     <div id="reading"></div>
     <div id="chars"></div>
   </section>
@@ -177,6 +182,28 @@ const dictReady = Promise.all([
 ]).then(([c,w])=>{ CH = c; WD = w; setStatus(''); });
 setStatus('사전을 불러오는 중…');
 
+
+// --- 그림(이모지) ---
+const EMO = {一:'1️⃣',二:'2️⃣',三:'3️⃣',四:'4️⃣',五:'5️⃣',六:'6️⃣',七:'7️⃣',八:'8️⃣',九:'9️⃣',十:'🔟',百:'💯',
+人:'🧑',大:'🐘',小:'🐜',上:'⬆️',下:'⬇️',左:'⬅️',右:'➡️',山:'⛰️',川:'🏞️',水:'💧',火:'🔥',木:'🌳',金:'🪙',土:'🌱',日:'☀️',月:'🌙',星:'⭐',天:'☁️',地:'🌍',
+雨:'🌧️',雪:'❄️',風:'🌬️',雲:'☁️',花:'🌸',草:'🌿',林:'🌲',森:'🌲',石:'🪨',田:'🌾',米:'🍚',魚:'🐟',鳥:'🐦',馬:'🐴',牛:'🐮',犬:'🐶',羊:'🐑',虎:'🐯',龍:'🐉',貝:'🐚',
+蟲:'🐛',耳:'👂',目:'👁️',口:'👄',手:'✋',足:'🦶',心:'❤️',力:'💪',女:'👩',男:'👨',子:'👶',父:'👨',母:'👩',老:'👴',王:'👑',學:'📚',校:'🏫',門:'🚪',家:'🏠',
+國:'🏳️',韓:'🇰🇷',車:'🚗',舟:'⛵',船:'🚢',刀:'🔪',弓:'🏹',工:'🛠️',食:'🍽️',飯:'🍚',茶:'🍵',果:'🍎',竹:'🎋',衣:'👕',電:'⚡',光:'💡',音:'🎵',歌:'🎤',
+書:'📖',文:'📄',字:'🔤',筆:'🖊️',道:'🛣️',海:'🌊',春:'🌷',秋:'🍂',冬:'⛄',夜:'🌃',夕:'🌇',朝:'🌅',時:'⏰',年:'📅',生:'🌱',白:'⬜',黑:'⬛',靑:'🟦',赤:'🟥',
+黃:'🟨',色:'🎨',骨:'🦴',肉:'🥩',牙:'🦷',齒:'🦷',鼻:'👃',愛:'💗',友:'🤝',笑:'😄',泣:'😢',夢:'💭',樂:'🎶',見:'👀',言:'💬',語:'💬',話:'💬',行:'🚶',走:'🏃',
+立:'🧍',休:'🛌',玉:'💎',卵:'🥚',乳:'🥛',菜:'🥬',桃:'🍑',栗:'🌰',梨:'🍐',鷄:'🐔',豚:'🐷',象:'🐘',熊:'🐻',鹿:'🦌',兎:'🐰',蛇:'🐍',蝶:'🦋',蜂:'🐝',
+太:'☀️',陽:'☀️',弟:'🧒',兄:'🧑',姉:'👧',妹:'👧',冊:'📕',本:'📘',雞:'🐔',魚:'🐟',鐵:'🔩',銀:'🥈',燈:'💡',橋:'🌉',寺:'🛕',病:'🤒',藥:'💊',醫:'🩺',
+先:'👩‍🏫',線:'〰️',畫:'🖼️',紙:'📃',旗:'🚩',球:'⚽',野:'🏞️',牛:'🐮',茶:'🍵',酒:'🍶',茶:'🍵',雷:'⚡',虹:'🌈',島:'🏝️',港:'⚓',城:'🏰','樹':'🌳',
+'眼':'👁️','髮':'💇','足':'🦶','指':'☝️','身':'🧍','體':'🧍'};
+const EMO_WORD = {學校:'🏫',學生:'🧑‍🎓',先生:'👩‍🏫',大韓民國:'🇰🇷',太陽:'☀️',電話:'📞',自動車:'🚗',汽車:'🚂',飛行機:'✈️',地球:'🌍',火山:'🌋',
+ 海水:'🌊',花草:'🌺',登山:'🥾',食堂:'🍽️',冊床:'📚',時計:'⏰',男女:'👫',父母:'👨‍👩‍👧',兄弟:'👬',人間:'🧑‍🤝‍🧑',愛人:'💑',韓食:'🍲',音樂:'🎵',
+ 國旗:'🚩',雪山:'🏔️',白雪:'⛄',天氣:'🌤️',火災:'🧯',洪水:'🌊',銀行:'🏦',病院:'🏥',藥局:'💊',警察:'👮',學院:'🏫',敎室:'🏫',運動:'🏃'};
+function pic(word){
+  if (EMO_WORD[word]) return EMO_WORD[word];
+  const e = [...word].map(h=>EMO[h]).filter(Boolean);
+  return [...new Set(e)].slice(0,3).join('');
+}
+
 const clean = t => t.replace(/[^\uAC00-\uD7A3\u3400-\u9FFF]/g,'');
 const isH = c => /[\u3400-\u9fff]/.test(c);
 
@@ -206,7 +233,7 @@ function render(reading, forms, idx=0){
   const word = forms[idx];
   const syl = [...reading];
   const info = [...word].map((h,i)=>charInfo(h, syl[i]));
-  const big = $('big'); big.className = ''; big.textContent = word;
+  const big = $('big'); big.className = ''; big.textContent = word; $('pic').textContent = pic(word);
   $('reading').textContent = reading;
   $('chars').innerHTML = info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.hun)} ${esc(c.eum)}</div>`).join('');
   const rel = related(word, reading);
@@ -215,19 +242,19 @@ function render(reading, forms, idx=0){
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>(${esc(c.hun)} ${esc(c.eum)})`).join(' + ')}<br>
     → <b>${esc(reading)}</b> = ${info.map(c=>esc(c.hun||c.eum)).join(' · ')}</p>
     ${forms.length>1 ? `<div class="tag">같은 소리의 다른 한자어</div><div class="cands">${forms.map((f,i)=>`<button class="chip" data-i="${i}" ${i===idx?'style="border-color:var(--accent)"':''}>${esc(f)}</button>`).join('')}</div>`:''}
-    ${rel.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
+    ${rel.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
   $('info').querySelectorAll('[data-i]').forEach(b=> b.onclick = ()=>render(reading, forms, +b.dataset.i));
 }
 
 function renderChars(syl){
   const list = CH ? Object.entries(CH).filter(([h,v])=>v.some(x=>x.endsWith(' '+syl))) : [];
-  $('big').className=''; $('big').textContent = list[0]?.[0] || '?';
+  $('big').className=''; $('big').textContent = list[0]?.[0] || '?'; $('pic').textContent = pic(list[0]?.[0]||'');
   $('reading').textContent = syl;
   $('chars').innerHTML = '';
   $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">'${esc(syl)}' 음을 가진 한자</div>
     <div class="cands">${list.slice(0,60).map(([h,v])=>`<button class="chip" data-h="${h}" title="${esc(v.join(', '))}">${h} ${esc(v.find(x=>x.endsWith(' '+syl)))}</button>`).join('')}</div>`;
   $('info').querySelectorAll('[data-h]').forEach(b=> b.onclick = ()=>{
-    const h=b.dataset.h; $('big').textContent=h;
+    const h=b.dataset.h; $('big').textContent=h; $('pic').textContent=pic(h);
     $('chars').innerHTML = (CH[h]||[]).map(x=>`<div>${esc(x)}</div>`).join('');
   });
 }
@@ -237,7 +264,7 @@ function lookupHanja(t){
   const hs = [...t];
   if (!REV){ REV = {}; for (const [k,v] of Object.entries(WD)) for (const h of v) (REV[h] ||= k); }
   if (hs.length > 1 && REV[t]) return render(REV[t], WD[REV[t]], WD[REV[t]].indexOf(t));
-  const big = $('big'); big.className=''; big.textContent = t;
+  const big = $('big'); big.className=''; big.textContent = t; $('pic').textContent = pic(t);
   const info = hs.map(h=>({hanja:h, list: CH[h]||[]}));
   $('reading').textContent = hs.length===1 ? (CH[t]||[]).map(x=>x.slice(x.lastIndexOf(' ')+1)).filter((v,i,a)=>a.indexOf(v)===i).join(' · ') : '';
   $('chars').innerHTML = hs.length>1 ? info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.list[0]||'')}</div>`).join('') : '';
@@ -248,7 +275,7 @@ function lookupHanja(t){
   }
   $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">훈·음</div>
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>: ${c.list.length ? c.list.map(esc).join(' / ') : '사전에 없는 글자'}`).join('<br>')}</p>
-    ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
+    ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul>${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
 }
 
 function found(t){ return !!(WD && WD[clean(t)]) ; }
@@ -268,10 +295,21 @@ async function lookup(text){
       if (WD[sub]) { setStatus(`'${t}'에서 '${sub}'을(를) 찾았어요.`); return render(sub, WD[sub]); }
     }
   }
-  $('big').className='placeholder'; $('big').textContent='?'; $('reading').textContent=t; $('chars').innerHTML='';
+  $('big').className='placeholder'; $('big').textContent='?'; $('pic').textContent=''; $('reading').textContent=t; $('chars').innerHTML='';
   $('info').innerHTML = '<h2>뜻과 쓰임</h2><p>사전에서 찾지 못했어요. 한자어가 아니거나 철자가 다를 수 있어요. 한 글자씩 써서 음에 맞는 한자를 찾아보세요.</p>';
 }
 function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// 한자 길이·칸 크기에 맞춰 글자 크기 자동 조절
+function fitBig(){
+  const row = document.querySelector('.hrow'), panel = row.parentElement;
+  const n = [...$('big').textContent].length || 1, hasPic = !!$('pic').textContent;
+  const pw = panel.clientWidth - 40, ph = panel.clientHeight;
+  const units = n * 1.02 + (hasPic ? 0.2 + 0.7 * Math.min(3, [...$('pic').textContent].length > 6 ? 2 : 1.2) : 0);
+  row.style.fontSize = Math.max(48, Math.min(pw / units, ph * 0.5, 230)) + 'px';
+}
+new MutationObserver(fitBig).observe(document.querySelector('.hrow'),{childList:true,characterData:true,subtree:true});
+addEventListener('resize', fitBig); fitBig();
 </script>
 </body>
 </html>
