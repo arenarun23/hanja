@@ -83,6 +83,7 @@
   @keyframes pulse{50%{opacity:.35}}
   /* ---- 태블릿 세로 / 휴대폰: 위아래로 쌓기, 필기 칸을 가장 크게 ---- */
   html,body{overscroll-behavior:none}
+  canvas{mix-blend-mode:difference}
   #pad,canvas{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .cands{min-height:0}
   #cands{min-height:42px;flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
@@ -179,7 +180,9 @@ function setAppH(){ document.documentElement.style.setProperty('--appH', Math.ro
 setAppH(); addEventListener('resize', setAppH); addEventListener('orientationchange', setAppH);
 window.visualViewport && visualViewport.addEventListener('resize', setAppH);
 const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
-function inkColor(){ return darkMQ.matches ? '#ffffff' : '#1c1a16'; }
+// 필기는 흰색으로 그리고, CSS(mix-blend-mode: difference)가 바탕색과 반대색으로 보이게 한다.
+// → 크롬 다크모드·삼성 인터넷 강제 다크모드 등 브라우저가 색을 바꿔도 항상 바탕과 대비됨
+function inkColor(){ return '#ffffff'; }
 darkMQ.addEventListener && darkMQ.addEventListener('change', ()=>redraw());
 function fit(){
   const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
