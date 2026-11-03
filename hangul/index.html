@@ -277,8 +277,10 @@ $('bWrite').onclick = async ()=>{
 };
 
 // 인식 결과 처리: 따라 쓰기 중이면 정답 확인, 아니면 사전에 있는 후보 우선
+const NOT_MSG = '글자를 알아보기 어려워요. 다시 써 주세요.';
+function notRecognized(){ setStatus(NOT_MSG); $('cands').innerHTML = ''; say(NOT_MSG); }
 function handleResult(c){
-  if (!c.length){ setStatus('글씨를 알아보지 못했어요. 다시 써 주세요.'); return; }
+  if (!c.length) return notRecognized();
   if (target){
     if (c.includes(target)){ return success(target); }
     setStatus(`인식: ${c[0]} · 「${shown(target)}」 모양을 다시 따라 써 볼까요?`); lookup(c[0], true); return;
@@ -307,7 +309,7 @@ $('bRec').onclick = ()=>{
   rec.onend = ()=>{
     $('bRec').classList.remove('on'); $('bRec').textContent = '🎙️ 녹음'; rec = null;
     const cand = [finalText, ...alts].map(x=>clean(x.replace(/\s/g,''))).filter(Boolean);
-    if (cand.length) handleResult(cand);
+    handleResult(cand);
   };
   rec.start();
 };
