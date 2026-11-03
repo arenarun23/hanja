@@ -74,6 +74,14 @@ h2{font-family:var(--font-display);font-weight:400;font-size:1.2rem;margin:0 0 8
 .stats{display:flex;align-items:center;gap:8px}
 .score{font-family:var(--font-display);font-size:1.15rem;background:var(--surface);border:2px solid var(--line);border-radius:999px;padding:2px 14px}
 .stats .sp{flex:1}
+.timer{font-variant-numeric:tabular-nums;min-width:4.6em;text-align:center}
+.timer.low{background:var(--oops-bg);border-color:var(--oops);color:var(--oops)}
+.tbar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:8px}
+.tbar i{display:block;height:100%;width:100%;background:var(--ok);border-radius:99px;transition:width .25s linear,background .25s}
+.tbar.low i{background:var(--oops)}
+.giveup{background:var(--surface);border:3px solid var(--oops);border-radius:20px;padding:10px;text-align:center}
+.giveup p{margin:0 0 8px}
+.giveup .row button{border:0;border-radius:999px;padding:8px 20px;font-family:var(--font-display);font-size:1.2rem}
 .stage{display:flex;align-items:center;gap:10px}
 .stage .mascot{width:90px;height:90px}
 .card{flex:1;min-width:0;background:var(--surface);border:3px solid var(--line);border-radius:24px;padding:10px 14px;text-align:center}
@@ -167,9 +175,14 @@ h2{font-family:var(--font-display);font-weight:400;font-size:1.2rem;margin:0 0 8
 
   <!-- 놀이 -->
   <section id="play" hidden>
-    <div class="stats"><span class="score" id="score">이은 말 0</span><span class="score" id="stars">⭐ 0</span><span class="sp"></span><button class="iconbtn" id="btnQuitTop" aria-label="그만하기">그만</button></div>
+    <div class="stats"><span class="score" id="score">이은 말 0</span><span class="score" id="stars">⭐ 0</span><span class="score timer" id="timer">⏱ 20</span><span class="sp"></span><button class="iconbtn" id="btnQuitTop" aria-label="정지">⏹ 정지</button></div>
+    <div class="tbar" id="tbar" aria-hidden="true"><i id="tfill"></i></div>
     <div class="stage" style="margin-top:10px"><span class="mascot-slot" id="stageMascot"></span>
       <div class="card"><div class="who" id="who"></div><div class="big" id="big">…</div><div class="pic" id="pic"></div><div class="need" id="need"></div></div>
+    </div>
+    <div class="giveup" id="giveup" hidden style="margin-top:10px">
+      <p>처음부터 다시해볼까? 아니면 그만할까?<br>그만하고 싶으면 정지 버튼을 눌러줘.</p>
+      <div class="row"><button id="btnRestart" style="background:var(--sun);color:var(--sun-ink)">🔄 처음부터</button><button id="btnStop" style="background:var(--oops);color:#fff">⏹ 정지</button></div>
     </div>
     <div class="say" id="say" role="status" aria-live="polite"></div>
     <div class="chain" id="chain" aria-label="지금까지 이은 말"></div>
@@ -363,7 +376,7 @@ const views = { home: $('#home'), play: $('#play'), result: $('#result') };
 function show(v){
   for (const k in views) views[k].hidden = k !== v;
   $('#btnHome').hidden = v === 'home';
-  if (v !== 'play') { stopMic(); try{ speechSynthesis.cancel(); }catch(e){} setSpeaking(false); }
+  if (v !== 'play') { stopTimer(); stopMic(); try{ speechSynthesis.cancel(); }catch(e){} setSpeaking(false); }
   window.scrollTo(0, 0);
 }
 let opts = { first: store.get('wc-first', 'bot'), level: store.get('wc-level', 'easy') };
@@ -409,7 +422,7 @@ function setBusy(b){ G.busy = b; $('#inp').disabled = b; $('#entry button').disa
 
 function startGame(){
   Object.assign(G, { chain: [], used: new Set(), req: null, stars: 0, kidCount: 0, hintsLeft: opts.level === 'hard' ? 3 : Infinity, busy: false, over: false });
-  show('play'); closePanels(); updateStats();
+  show('play'); closePanels(); stopTimer(); $('#giveup').hidden = true; paintTimer(LIMIT); updateStats();
   $('#inp').value = ''; $('#chain').innerHTML = ''; $('#pic').textContent = ''; mood('happy');
   if (opts.first === 'bot'){
     $('#who').textContent = ''; $('#big').textContent = '…';
@@ -419,9 +432,44 @@ function startGame(){
   } else {
     $('#who').textContent = '내 차례'; $('#big').textContent = '?'; showNeed();
     line('', '먼저 아무 말이나 해 봐! 두 글자 이상이면 좋아요.');
-    speak('먼저 아무 말이나 해 봐!'); setBusy(false);
+    speak('먼저 아무 말이나 해 봐!', () => { if (!G.over) turnStart(); }); setBusy(false);
   }
 }
+
+/* ───────── 대답 시간: 20초 카운트다운, 못 하면 한 번 더 기회 ───────── */
+const LIMIT = 20;
+let tmr = null, tEnd = 0, strikes = 0;
+function stopTimer(){ clearInterval(tmr); tmr = null; }
+function paintTimer(left){
+  const s = Math.max(0, Math.ceil(left));
+  $('#timer').textContent = `⏱ ${s}`;
+  const low = left <= 5;
+  $('#timer').classList.toggle('low', low); $('#tbar').classList.toggle('low', low);
+  $('#tfill').style.width = Math.max(0, left / LIMIT * 100) + '%';
+}
+function startTimer(){
+  stopTimer(); if (G.over) return;
+  tEnd = Date.now() + LIMIT * 1000; paintTimer(LIMIT);
+  tmr = setInterval(() => {
+    const left = (tEnd - Date.now()) / 1000;
+    if (left <= 0){ stopTimer(); paintTimer(0); timeUp(); } else paintTimer(left);
+  }, 250);
+}
+function timeUp(){
+  if (G.over || G.busy) return;
+  stopMic(); closePanels();
+  strikes++;
+  mood('oops'); beep([260, 200]);
+  if (strikes === 1){
+    line('oops', '다시 생각해 보자.');
+    speak('다시 생각해 보자.', () => { if (!G.over) startTimer(); });
+  } else {
+    line('oops', '처음부터 다시해볼까? 아니면 그만할까? 그만하고 싶으면 정지 버튼을 눌러줘.');
+    $('#giveup').hidden = false; $('#inp').disabled = true; $('#entry button').disabled = true; $('#bMic').disabled = true; $('#bPen').disabled = true; $('#bHint').disabled = true;
+    speak('처음부터 다시해볼까? 아니면 그만할까? 그만하고 싶으면 정지 버튼을 눌러줘.');
+  }
+}
+function turnStart(){ strikes = 0; $('#giveup').hidden = true; startTimer(); }
 
 /* 아이가 낸 말 처리 */
 function normalize(raw){
@@ -443,6 +491,7 @@ function submit(raw, fromHint){
   if (G.used.has(word)){ mood('oops'); beep([260, 200]); line('oops', `‘${word}’은(는) 벌써 나온 말이에요. 다른 말을 해 볼까요?`); return; }
 
   // 통과!
+  stopTimer(); strikes = 0; paintTimer(LIMIT);
   const isKnown = known(word);
   G.used.add(word);
   G.chain.push({ who: 'kid', word, emoji: emojiOf(word) });
@@ -501,14 +550,14 @@ function botTurn(prev, lead){
   line('', prev ? `${lead}  나는 ‘${w}’!` : `나는 ‘${w}’! 이제 네 차례야.`);
   speak(w, () => {
     if (G.over) return;
-    setBusy(false); $('#inp').focus({ preventScroll: true });
+    setBusy(false); $('#inp').focus({ preventScroll: true }); turnStart();
   });
 }
 
 /* 끝내기 */
 function finish(kidWins){
   if (G.over) return;
-  G.over = true; stopMic(); setBusy(true);
+  G.over = true; stopTimer(); stopMic(); setBusy(true); $('#giveup').hidden = true;
   const n = G.kidCount, prevBest = +store.get('wc-best', '0');
   const newBest = n > prevBest;
   if (newBest) store.set('wc-best', String(n));
@@ -647,6 +696,8 @@ $('#bHint').onclick = () => {
 $('#btnGo').onclick = startGame;
 $('#btnAgain').onclick = startGame;
 $('#btnHome').onclick = () => { G.over = true; show('home'); };
+$('#btnRestart').onclick = startGame;
+$('#btnStop').onclick = () => finish(false);
 $('#btnHome2').onclick = () => show('home');
 const quit = () => { if (G.over) return; finish(false); };
 $('#btnQuit').onclick = quit; $('#btnQuitTop').onclick = quit;
