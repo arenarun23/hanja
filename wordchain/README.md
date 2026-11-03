@@ -4,4 +4,4 @@
 - 두음법칙: 끝 글자가 `리·녀·라…` 이면 `이·여·나…` 로 시작해도 OK, 반대(`이→리`)도 OK (`startsFor`)
 - 저학년 배려: 사전에 없는 말도 첫 글자만 맞으면 받아 주고 격려, 두 글자 이상·중복만 걸러 냄. 말랑이는 이어 가기 쉬운 쉬운 말(그림 이모지 포함)로 대답, `도전` 단계는 어려운 끝 글자도 냄
 - 말랑이가 이을 말이 없으면 아이의 승리
-- 낱말: `index.html` 안 `kidWords`(쉬운 말 ~1,100개, 낱말 뒤 이모지) + `extra.txt`(한자어 2~3글자, `npm run build:extra` 로 `dict/words.json` 에서 생성)
+- 낱말: `index.html` 안 `kidWords`(쉬운 말 ~1,100개, 낱말 뒤 이모지) + `extra.txt`(보조 사전 약 5.2만 개: hunspell-ko 명사 어간 + 한자 사전의 흔한 한자어. `npm run build:extra` 로 생성, 출처 라이선스는 `source/LICENSE-hunspell-ko.txt`)
