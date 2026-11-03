@@ -45,6 +45,8 @@
   #pic{font-size:.6em;flex:none;line-height:1;min-height:0}
   #pic:empty{display:none}
   #reading{font-size:30px;margin-top:6px}
+  #stars{font-size:26px;min-height:30px;letter-spacing:2px}
+  #level .seg{font-size:20px;padding:3px 12px}
   #listen{font-size:18px;color:var(--mute);margin-top:2px;cursor:pointer}
   .vox{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:8px;font-size:18px;color:var(--mute)}
   .vox label{display:flex;align-items:center;gap:6px;white-space:nowrap}
@@ -116,7 +118,8 @@
     <div id="pad"><div id="guide"></div><canvas id="cv"></canvas><div id="hint">여기에 한글을 써 보세요 (예: 가, 학교)</div></div>
     <div class="cands" id="cands"></div>
     <div id="status"></div>
-    <div class="mode" id="mode"><span>따라 쓰기</span><button class="seg" data-c="자모">ㄱㄴㄷ</button><button class="seg" data-c="동물">🐶 동물</button><button class="seg" data-c="먹거리">🍎 먹거리</button><button class="seg" data-c="탈것·물건">🚗 탈것</button><button class="seg" data-c="몸·자연">🌳 몸·자연</button></div>
+    <div class="mode" id="level"><span>대상</span><button class="seg on" data-l="kid">🧒 유아</button><button class="seg" data-l="school">🎒 1·2학년</button></div>
+    <div class="mode" id="cats"><span>따라 쓰기</span></div>
     <div class="bar">
       <button class="btn" id="bWrite">✍️ 필기</button>
       <button class="btn" id="bRec">🎙️ 녹음</button>
@@ -128,6 +131,7 @@
   <section class="panel hangul">
     <div class="hrow"><div id="big" class="placeholder">한글</div><div id="pic"></div></div>
     <div id="reading"></div>
+    <div id="stars" title="잘 쓴 횟수"></div>
     <div id="listen">🔊 글자를 누르면 읽어줘요</div>
     <button id="vtoggle" title="읽기 속도·소리 크기">⚙️</button>
     <div class="vox">
@@ -137,8 +141,8 @@
   </section>
 
   <section class="panel info" id="info">
-    <h2>글자 풀이</h2>
-    <p class="placeholder">한글을 쓰거나 말하면 자음·모음 풀이와 쓰임이 여기에 나옵니다. 아래 ‘따라 쓰기’ 버튼으로 낱말을 골라 연습할 수도 있어요.</p>
+    <h2 id="infoH">글자 풀이</h2>
+    <p class="placeholder" id="intro"></p>
   </section>
 </div>
 
@@ -151,12 +155,15 @@ const RAW = {
   '동물':'강아지🐶 고양이🐱 토끼🐰 거북이🐢 사자🦁 호랑이🐯 코끼리🐘 원숭이🐵 기린🦒 돼지🐷 소🐮 말🐴 닭🐔 오리🦆 개구리🐸 나비🦋 벌🐝 물고기🐟 고래🐳 곰🐻 여우🦊 펭귄🐧 상어🦈 뱀🐍',
   '먹거리':'사과🍎 바나나🍌 포도🍇 딸기🍓 수박🍉 귤🍊 복숭아🍑 감🍅 배🍐 밥🍚 빵🍞 우유🥛 달걀🥚 치즈🧀 피자🍕 라면🍜 과자🍪 사탕🍬 아이스크림🍦 당근🥕 옥수수🌽 김밥🍙 물💧',
   '탈것·물건':'자동차🚗 버스🚌 기차🚆 비행기✈️ 배🚢 자전거🚲 책📖 연필✏️ 가방🎒 시계⏰ 모자🧢 신발👟 안경👓 우산☂️ 공⚽ 집🏠 학교🏫 문🚪 의자🪑 전화📞 컴퓨터💻 풍선🎈 선물🎁',
+  '학교·가족':'선생님👩‍🏫 친구🧑‍🤝‍🧑 교실🏫 운동장🏟️ 공책📓 지우개🧽 가위✂️ 크레파스🖍️ 동생👶 형🧑 누나👧 언니👧 할머니👵 할아버지👴 가족👨‍👩‍👧 학생🧑‍🎓 숙제📝 급식🍱 도서관📚 노래🎵 그림🖼️',
   '몸·자연':'눈👁️ 코👃 입👄 귀👂 손✋ 발🦶 머리💇 하늘☁️ 구름☁️ 바다🌊 산⛰️ 나무🌳 꽃🌸 해☀️ 달🌙 별⭐ 비🌧️ 눈사람⛄ 바람🌬️ 무지개🌈 불🔥 흙🌱 엄마👩 아빠👨 아기👶'
 };
 const CATS = {}, PIC = {}, ALL = [];
 for (const c in RAW){ CATS[c] = []; RAW[c].split(' ').forEach(t=>{ const m = t.match(/^([가-힣]+)(.+)$/); if (m){ CATS[c].push(m[1]); if (!PIC[m[1]]) { PIC[m[1]] = m[2]; ALL.push(m[1]); } } }); }
 const JAMO_C = 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎ'.split(''), JAMO_V = 'ㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ'.split('');
-CATS['자모'] = [...JAMO_C, ...JAMO_V];
+const SENT = [['엄마 사랑해요','💗'],['안녕하세요','👋'],['학교에 가요','🏫'],['사과를 먹어요','🍎'],['책을 읽어요','📖'],['비가 와요','🌧️'],['꽃이 피었어요','🌸'],['나비가 날아요','🦋'],['친구와 놀아요','🤝'],['강아지가 뛰어요','🐶'],['나는 학생이에요','🧑‍🎓'],['하늘이 맑아요','☀️']];
+const DISP = {}; CATS['문장'] = SENT.map(([t,e])=>{ const k = t.replace(/\s/g,''); PIC[k] = e; DISP[k] = t; return k; });
+const J_BASIC_C = JAMO_C, J_BASIC_V = JAMO_V, J_MORE = 'ㄲㄸㅃㅆㅉㅐㅔㅒㅖㅘㅙㅚㅝㅞㅟㅢ'.split('');
 
 /* ---------------- 자모 분해 ---------------- */
 const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
@@ -168,10 +175,11 @@ const NAME = {ㄱ:'기역',ㄲ:'쌍기역',ㄴ:'니은',ㄷ:'디귿',ㄸ:'쌍디
 const isSyl = c => c >= '가' && c <= '힣';
 const isJamo = c => /[ㄱ-ㅣ]/.test(c);
 function split(c){ const n = c.charCodeAt(0) - 0xAC00; return { c: CHO[Math.floor(n/588)], v: JUNG[Math.floor((n%588)/28)], f: JONG[n%28] }; }
+const shown = w => DISP[w] || w;
 const clean = t => t.replace(/[^가-힣ㄱ-ㅣ]/g,'');
 
 /* ---------------- 그림판 (필기) ---------------- */
-let target = '';
+let target = '', level = 'kid', plist = [], pidx = -1;
 const cv = $('cv'), ctx = cv.getContext('2d');
 let strokes = [], cur = null, t0 = 0, drawing = false;
 function setAppH(){ document.documentElement.style.setProperty('--appH', Math.round(window.visualViewport ? visualViewport.height : innerHeight) + 'px'); }
@@ -183,7 +191,7 @@ darkMQ.addEventListener && darkMQ.addEventListener('change', ()=>redraw());
 function fit(){ const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1; cv.width = r.width*d; cv.height = r.height*d; ctx.setTransform(d,0,0,d,0,0); redraw(); fitGuide(); }
 function redraw(){
   ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.restore();
-  ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = inkColor();
+  ctx.lineWidth = level === 'kid' ? 9 : 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = inkColor();
   for (const s of strokes){ ctx.beginPath(); s[0].forEach((x,i)=> i ? ctx.lineTo(x,s[1][i]) : ctx.moveTo(x,s[1][i])); if (s[0].length===1) ctx.lineTo(s[0][0]+.1,s[1][0]); ctx.stroke(); }
 }
 let lastPad = '';
@@ -199,7 +207,7 @@ cv.addEventListener('pointerdown', e=>{
 });
 cv.addEventListener('pointermove', e=>{ if (!drawing) return; const [x,y] = pos(e); cur[0].push(x); cur[1].push(y); cur[2].push(Math.round(performance.now()-t0)); redraw(); });
 cv.addEventListener('pointercancel', ()=>{ drawing = false; });
-cv.addEventListener('pointerup', ()=>{ drawing = false; clearTimeout(autoT); autoT = setTimeout(()=>{ if (strokes.length && !drawing) $('bWrite').click(); }, 1300); });   // 1.3초 쉬면 자동 인식
+cv.addEventListener('pointerup', ()=>{ drawing = false; clearTimeout(autoT); autoT = setTimeout(()=>{ if (strokes.length && !drawing) $('bWrite').click(); }, level === 'kid' ? 1800 : 1300); });   // 1.3초 쉬면 자동 인식
 
 function clearPad(){ clearTimeout(autoT); strokes = []; t0 = 0; redraw(); $('cands').innerHTML = ''; $('hint').style.display = target ? 'none' : ''; }
 $('bClear').onclick = clearPad;
@@ -207,32 +215,49 @@ const setStatus = s => { $('status').textContent = s || ''; };
 
 /* ---------------- 따라 쓰기 (바탕 글자 안내) ---------------- */
 function fitGuide(){
-  const g = $('guide'), r = $('pad').getBoundingClientRect(), n = [...target].length || 1;
-  g.textContent = target; g.style.fontSize = Math.max(30, Math.min(r.height*0.8, r.width/n*0.95)) + 'px';
+  const g = $('guide'), r = $('pad').getBoundingClientRect(), n = [...shown(target)].length || 1;
+  g.textContent = shown(target); g.style.fontSize = Math.max(30, Math.min(r.height*0.8, r.width/n*0.95)) + 'px';
 }
 function setTarget(w){
   target = w; fitGuide();
   $('hint').style.display = w ? 'none' : (strokes.length ? 'none' : '');
   $('hint').textContent = '여기에 한글을 써 보세요 (예: 가, 학교)';
 }
-let curCat = '';
-document.querySelectorAll('#mode .seg').forEach(b=> b.onclick = ()=>{
-  const c = b.dataset.c; curCat = c;
-  document.querySelectorAll('#mode .seg').forEach(x=>x.classList.toggle('on', x===b));
-  showCat(c);
+const BAD_F = new Set('ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ'), BAD_V = new Set('ㅘㅙㅚㅝㅞㅟㅢㅒㅖ'), BAD_C = new Set('ㄲㄸㅃㅆㅉ');
+const easy = w => [...w].length <= 2 && [...w].every(c=>{ const x = split(c); return !BAD_F.has(x.f) && !BAD_V.has(x.v) && !BAD_C.has(x.c); });
+const KID_CATS = ['자모','동물','먹거리','탈것·물건','몸·자연'], SCH_CATS = ['자모','동물','먹거리','탈것·물건','몸·자연','학교·가족','문장'];
+const CAT_LABEL = {'자모':'ㄱㄴㄷ','동물':'🐶 동물','먹거리':'🍎 먹거리','탈것·물건':'🚗 탈것','몸·자연':'🌳 몸·자연','학교·가족':'🏫 학교·가족','문장':'💬 문장'};
+const listFor = c => c === '자모' ? (level === 'kid' ? [...J_BASIC_C, ...J_BASIC_V] : [...J_BASIC_C, ...J_BASIC_V, ...J_MORE]) : (CATS[c]||[]).filter(w=> level === 'school' || easy(w));
+function renderCats(){
+  const box = $('cats'); box.innerHTML = '<span>따라 쓰기</span>';
+  (level === 'kid' ? KID_CATS : SCH_CATS).forEach(c=>{ const b = document.createElement('button'); b.className = 'seg'; b.dataset.c = c; b.textContent = CAT_LABEL[c]; b.onclick = ()=>{ box.querySelectorAll('.seg').forEach(x=>x.classList.toggle('on', x===b)); showCat(c); }; box.appendChild(b); });
+}
+function intro(){
+  $('intro').textContent = level === 'kid'
+    ? '글자를 쓰거나 말해 보세요! 아래 ‘따라 쓰기’ 버튼을 누르면 흐린 글자 위에 따라 쓸 수 있어요.'
+    : '한글을 쓰거나 말하면 자음·모음·받침 풀이와 쓰임이 나와요. ‘따라 쓰기’로 낱말과 문장을 연습해 보세요.';
+}
+document.querySelectorAll('#level .seg').forEach(b=> b.onclick = ()=>{
+  level = b.dataset.l; document.querySelectorAll('#level .seg').forEach(x=>x.classList.toggle('on', x===b));
+  clearPad(); setTarget(''); plist = []; pidx = -1; renderCats(); redraw();
+  $('big').className = 'placeholder'; $('big').textContent = '한글'; $('pic').textContent = ''; $('reading').textContent = '';
+  $('info').innerHTML = '<h2 id="infoH">글자 풀이</h2><p class="placeholder" id="intro"></p>'; intro(); setStatus('');
+  say(level === 'kid' ? '유아 단계예요' : '일 이학년 단계예요');
 });
 function showCat(c){
-  const list = CATS[c] || [], jm = c === '자모';
+  const list = listFor(c), jm = c === '자모';
   $('big').className = ''; $('big').textContent = jm ? 'ㄱㄴㄷ' : c.replace('·',' ');
   $('pic').textContent = jm ? '' : PIC[list[0]] || ''; $('reading').textContent = `${list.length}개 · 눌러서 따라 써 보세요`;
-  $('info').innerHTML = `<h2>${esc(c)} (${list.length})</h2><div class="gchips">${list.map(w=>`<button class="gc" data-w="${esc(w)}">${esc(w)}${jm?`<small>${esc(NAME[w])}</small>`:`<i>${PIC[w]||''}</i>`}</button>`).join('')}</div>`;
-  $('info').querySelectorAll('.gc').forEach(b=> b.onclick = ()=>{ clearPad(); practice(b.dataset.w); });
+  $('info').innerHTML = `<h2>${esc(c)} (${list.length})</h2><div class="gchips">${list.map(w=>`<button class="gc" data-w="${esc(w)}">${esc(shown(w))}${jm?`<small>${esc(NAME[w])}</small>`:`<i>${PIC[w]||''}</i>`}</button>`).join('')}</div>`;
+  $('info').querySelectorAll('.gc').forEach(b=> b.onclick = ()=>{ clearPad(); plist = list; pidx = list.indexOf(b.dataset.w); practice(b.dataset.w); });
   say(c.replace('·',' ')); setStatus('');
 }
 function practice(w){
   setTarget(w); lookup(w, true);
-  setStatus(`「${w}」 위에 따라 써 보세요 ✍️`);
+  setStatus(`「${shown(w)}」 위에 따라 써 보세요 ✍️`);
 }
+let starN = 0;
+function addStar(){ starN++; $('stars').textContent = '⭐'.repeat(Math.min(starN,10)) + (starN > 10 ? ` ×${starN}` : ''); }
 
 /* ---------------- 필기 인식 (구글 Input Tools, 비공식) ---------------- */
 $('bWrite').onclick = async ()=>{
@@ -256,15 +281,17 @@ function handleResult(c){
   if (!c.length){ setStatus('글씨를 알아보지 못했어요. 다시 써 주세요.'); return; }
   if (target){
     if (c.includes(target)){ return success(target); }
-    setStatus(`인식: ${c[0]} · 「${target}」 모양을 다시 따라 써 볼까요?`); lookup(c[0], true); return;
+    setStatus(`인식: ${c[0]} · 「${shown(target)}」 모양을 다시 따라 써 볼까요?`); lookup(c[0], true); return;
   }
   const pick = c.find(x=>PIC[x]) || c[0];
   setStatus(`인식: ${pick}`); lookup(pick);
 }
 function success(w){
-  setStatus(`🎉 참 잘했어요! 「${w}」`);
+  setStatus(`🎉 참 잘했어요! 「${shown(w)}」`); addStar();
   lookup(w, true); const b = $('big'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
-  say(`참 잘했어요. ${w}`);
+  say(`참 잘했어요. ${shown(w)}`);
+  if (plist.length && pidx >= 0){ const nx = plist[(pidx + 1) % plist.length]; const c = $('cands'); c.innerHTML = '';
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = `다음 ▶ ${shown(nx)}`; b.onclick = ()=>{ clearPad(); pidx = (pidx + 1) % plist.length; practice(nx); }; c.appendChild(b); }
 }
 
 /* ---------------- 음성 인식 ---------------- */
@@ -307,23 +334,23 @@ function lookup(text, keepTarget){
   const t = clean(text); if (!t) { setStatus('글자를 알아보지 못했어요.'); return; }
   if (!keepTarget && target && t !== target){ /* 자유 입력으로 돌아가면 안내 글자 해제 */ setTarget(''); }
   const chars = [...t];
-  const big = $('big'); big.className = ''; big.textContent = t; $('pic').textContent = picOf(t);
+  const big = $('big'); big.className = ''; big.textContent = shown(t); $('pic').textContent = picOf(t);
   const sylls = chars.filter(isSyl);
-  $('reading').textContent = sylls.length ? (sylls.length === 1 ? jamoText(sylls[0]).split('').join(' + ') : sylls.join(' · ')) : (NAME[chars[0]] || '');
+  $('reading').textContent = sylls.length ? (sylls.length === 1 ?  jamoText(sylls[0]).split('').join(' + ') : sylls.join(' · ')) : (NAME[chars[0]] || '');
   // 글자 풀이
   const rows = chars.map(c=>{
     if (isSyl(c)){ const s = split(c);
-      return `<b>${esc(c)}</b> = <span class="jm">${s.c}</span><small>${NAME[s.c]}</small> + <span class="jm">${s.v}</span><small>${NAME[s.v]}</small>${s.f ? ` + <span class="jm">${s.f}</span><small>${NAME[s.f]||''} 받침</small>` : ' <small>(받침 없음)</small>'}`; }
+      return `<b>${esc(c)}</b> = <span class="jm">${s.c}</span><small>${NAME[s.c]}</small> + <span class="jm">${s.v}</span><small>${NAME[s.v]}</small>${s.f ? ` + <span class="jm">${s.f}</span><small>${NAME[s.f]||''} 받침</small>` : (level === 'kid' ? '' : ' <small>(받침 없음)</small>')}`; }
     return `<b>${esc(c)}</b> = ${esc(NAME[c]||'')} ${JAMO_C.includes(c)||CHO.includes(c) ? '(자음)' : '(모음)'}`; });
-  const used = ALL.filter(w=> w !== t && chars.some(c=>w.includes(c))).slice(0,12);
+  const used = ALL.filter(w=> w !== t && chars.some(c=>w.includes(c)) && (level === 'school' || easy(w))).slice(0, level === 'kid' ? 6 : 12);
   const near = PIC[t] ? [] : ALL.filter(w=>lev1(w,t)).slice(0,6);
   $('info').innerHTML = `<h2>글자 풀이</h2>
-    <div class="tag">자음 + 모음 (+ 받침)</div><p>${rows.join('<br>')}</p>
-    ${PIC[t] ? `<div class="tag">그림 낱말</div><p>${PIC[t]} ${esc(t)}</p>` : ''}
+    <div class="tag">${level === 'kid' ? '자음 + 모음' : '자음 + 모음 (+ 받침)'}</div><p>${rows.join('<br>')}</p>
+    ${PIC[t] ? `<div class="tag">그림 낱말</div><p>${PIC[t]} ${esc(shown(t))}</p>` : ''}
     ${near.length ? `<div class="tag">혹시 이 낱말인가요?</div><div class="gchips">${near.map(w=>`<button class="gc" data-w="${esc(w)}">${esc(w)}<i>${PIC[w]}</i></button>`).join('')}</div>` : ''}
     ${used.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 낱말</div><ul class="cols">${used.map(w=>`<li>${PIC[w]} ${esc(w)}</li>`).join('')}</ul>` : ''}`;
   $('info').querySelectorAll('.gc').forEach(b=> b.onclick = ()=>{ clearPad(); practice(b.dataset.w); });
-  say(chars.length === 1 && isJamo(chars[0]) ? NAME[chars[0]] : t);
+  say(chars.length === 1 && isJamo(chars[0]) ? NAME[chars[0]] : shown(t));
 }
 
 /* ---------------- 읽어주기 (기기 기본 목소리) ---------------- */
@@ -347,6 +374,7 @@ function fitBig(){
 }
 new MutationObserver(fitBig).observe(document.querySelector('.hrow'),{childList:true,characterData:true,subtree:true});
 addEventListener('resize', fitBig); new ResizeObserver(fitBig).observe(document.querySelector('.hrow')); fitBig();
+renderCats(); intro();
 </script>
 </body>
 </html>
