@@ -3,11 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build:data": "node scripts/build-data.mjs",
-    "build:extra": "node wordchain/build-extra.mjs"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+  "scripts": { "build:data": "node scripts/build-data.mjs" },
+  "engines": { "node": ">=20" }
 }
