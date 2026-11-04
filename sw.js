@@ -68,6 +68,24 @@ async function cacheFirst(e, req) {
   }
 }
 
+// 첫 방문에서는 페이지가 서비스 워커보다 먼저 나머지 사전(words-rest)을 받아 저장되지 않는다. 설치 중에 4MB 를 받으면 활성화가 늦어지므로,
+// 페이지가 나머지 사전을 합친 뒤 '저장해 줘' 라고 알리면 그때 배경에서 저장한다(이미 있으면 건너뜀).
+self.addEventListener('message', (e) => {
+  const d = e.data;
+  if (d === 'cache-rest') {
+    e.waitUntil(caches.open(VERSION).then(async (c) => {
+      if (await c.match('dict/words-rest.json')) return;
+      await c.add(new Request('dict/words-rest.json'));
+    }).catch(() => {}));
+  } else if (d && d.type === 'cache-urls' && Array.isArray(d.urls)) {
+    // 페이지가 서비스 워커보다 먼저 받은 글꼴 조각을 저장한다(브라우저 캐시에 있어 추가 다운로드 거의 없음).
+    // 보안: 같은 출처의 글꼴 폴더(../fonts/)의 .woff2 파일만, 최대 200개.
+    const ok = d.urls.slice(0, 200).map((u) => { try { return new URL(u, self.location.href); } catch (_) { return null; } })
+      .filter((u) => u && u.origin === self.location.origin && u.pathname.startsWith(FONT_PATH) && u.pathname.endsWith('.woff2') && !u.pathname.includes('..'));
+    e.waitUntil(caches.open(VERSION).then((c) => Promise.allSettled(ok.map(async (u) => { if (!(await c.match(u.href))) await c.add(new Request(u.href)); }))).catch(() => {}));
+  }
+});
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;

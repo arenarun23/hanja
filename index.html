@@ -357,7 +357,15 @@ function ensureRest(){
 }
 dictReady.then(()=>{ const go = ()=>ensureRest(); window.requestIdleCallback ? requestIdleCallback(go, {timeout: 2500}) : setTimeout(go, 800); });
 // 오프라인: 서비스 워커가 앱·사전·글꼴을 저장해 둔다(처음 한 번 인터넷으로 열면 이후엔 인터넷 없이도 열림). 필기·음성 인식은 인터넷이 필요하다.
-if ('serviceWorker' in navigator) addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+if ('serviceWorker' in navigator) addEventListener('load', ()=>{
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  // 나머지 사전이 합쳐지면 서비스 워커에게 저장을 부탁한다(첫 방문에서도 오프라인 준비가 끝나도록)
+  Promise.all([navigator.serviceWorker.ready, dictReady]).then(([reg])=>{
+    ensureRest().then(()=>{ if (reg.active && REST_DONE) reg.active.postMessage('cache-rest'); }).catch(()=>{});
+    // 서비스 워커가 켜지기 전에 이미 받은 글꼴 조각도 저장해 두도록 알린다
+    document.fonts.ready.then(()=>{ const urls = performance.getEntriesByType('resource').map(r=>r.name).filter(u=>/\/fonts\/[^/?#]+\.woff2$/.test(u)); if (urls.length && reg.active) reg.active.postMessage({type:'cache-urls', urls}); });
+  }).catch(()=>{});
+});
 
 
 // --- 그림(이모지) ---
