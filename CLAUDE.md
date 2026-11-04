@@ -3,11 +3,13 @@
 필기/음성으로 낱말을 입력하면 한자·훈음·같은 글자가 쓰인 말을 보여 주는 앱. 급수(8급 50자·7급 100자·6급 150자, 한국어문회 기준) 한자 지원.
 
 ## 구조
-- `index.html`(약 38KB), 런타임 사전 `dict/{chars,words,grades,levels}.json`(words.json 약 5.4MB), 원본 `source/`(libhangul `hanja.txt`, BSD-3 `source/LICENSE-hanja-data.txt`), 생성 스크립트 `scripts/build-data.mjs`(`npm run build:data`), `icons/`, `manifest.webmanifest`, `vercel.json`.
-- 사전을 바꾸면 반드시 `npm run build:data` 로 `dict/` 를 재생성해 함께 커밋한다. 앱은 `fetch('dict/…')`(상대경로)로 읽으므로 **허브 배포에서 `dict/` 는 제외하면 안 된다**(허브 `apps.json` 의 `exclude` 는 `source`·`scripts`·`package.json` 만).
+- `index.html`(약 40KB), `sw.js`(오프라인 서비스 워커), 런타임 사전 `dict/`: `chars.json`(한자 7,374자 훈·음) · `words-core.json`(핵심 낱말 1.4MB, 처음 열 때 읽음) · `words-rest.json`(나머지 3.9MB, 배경에서 합침) · `grades.json`·`levels.json`(급수) · `strokes.json`(획수·부수). 원본 `source/`(libhangul `hanja.txt` BSD-3 `LICENSE-hanja-data.txt`, 유니코드 Unihan 일부 `unihan-subset.txt` + Unicode License V3 `LICENSE-unihan.txt`), 생성 스크립트 `scripts/build-data.mjs`(`npm run build:data`)·`scripts/build-unihan.mjs`, `icons/`, `manifest.webmanifest`, `vercel.json`.
+- 사전을 바꾸면 반드시 `npm run build:data` 로 `dict/` 를 재생성해 함께 커밋한다(획수·부수는 `node scripts/build-unihan.mjs`). 앱은 `fetch('dict/…')`(상대경로)로 읽으므로 **허브 배포에서 `dict/` 는 제외하면 안 된다**(허브 `apps.json` 의 `exclude` 는 `source/hanja.txt`·`source/levels.json`·`source/unihan-subset.txt`·`scripts` — **`source/LICENSE-*` 는 배포에 남긴다**).
+- **낱말 사전은 2단계**: 핵심(`words-core`, 한자어의 글자 급수 평균 ≥ 6, 8~6급 한자로 된 낱말 18,026개 전부 포함)을 먼저 읽고 나머지(`words-rest`)는 화면이 열린 뒤 `ensureRest()` 로 합친다(합치면 예전 `words.json` 과 키·순서까지 같음). 핵심에서 못 찾았거나 **부분 일치만** 되면 `lookup()` 이 나머지가 합쳐질 때까지 기다렸다가 다시 찾는다. `WD`(낱말)를 새로 훑는 코드를 추가하면 합쳐지기 전에도 동작하는지 확인한다. 기준은 `scripts/build-data.mjs` 의 `CORE_SCORE`.
 - 입력 모드 `漢字/한글`, 버튼 ✍️필기·🎙️녹음·⏹중지, ⚙️(속도·크기·글씨 색은 `localStorage('hanja-ink')`). 필기 인식은 구글 입력도구 비공식 엔드포인트, 음성은 Web Speech API.
 - 화면 구석 `버전 MM/DD HH:MM` 라벨은 빌드 확인용 — 수정할 때 같이 갱신한다.
-- words.json 이 커서 모바일 첫 로딩이 느릴 수 있다.
+- **오프라인**: `sw.js` 가 앱·핵심 사전·글꼴 CSS 를 설치 때 저장하고, 나머지 사전·글꼴 조각은 쓸 때 저장한다(처음 한 번 인터넷으로 열면 이후엔 인터넷 없이 열림). 화면(HTML)은 네트워크 우선이라 앱을 고치면 바로 반영되고, 사전은 "저장본 먼저 + 뒤에서 갱신"이라 사전 변경도 자동 반영된다. **`dict/` 에 새 파일을 추가하면 `sw.js` 의 `CORE` 목록에도 넣고**, 저장 구조를 바꿀 때만 `VERSION` 을 올린다. 글꼴 조각은 한 번 화면에 쓰인 것만 저장되므로, 오프라인에서 처음 보는 글자는 기기 기본 글꼴로 나올 수 있다. 필기·음성 인식은 인터넷이 필요하다.
+- 획수·부수는 유니코드 Unihan(`strokes.json`)이며 표시는 `strokeLine()`. 값 출처·라이선스는 `source/LICENSE-unihan.txt`.
 
 ## 공통 규칙 (AIEDU 허브)
 - 이 앱은 **AIEDU 허브**(https://aiedu-pearl.vercel.app)의 서비스 중 하나다. 허브는 `arenarun23/aiedu` 저장소이고, 빌드 때 이 저장소를 가져와 `/hanja/` 하위 경로로 서비스한다. 허브 전체 구조·점검법은 그 저장소의 `.claude/skills/aiedu-hub`, 서비스별 설명은 `.claude/skills/aiedu-services` 에 있다(필요하면 `arenarun23/aiedu` 를 add_repo 로 붙여 읽는다).

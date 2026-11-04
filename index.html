@@ -185,7 +185,7 @@ a.draggable=false;})();
     <div class="vox">
       <label>🐢 속도 <input type="range" id="rate" min="0.5" max="1.5" step="0.1" value="0.8"><b id="rateV">0.8</b></label>
       <label>🔈 크기 <input type="range" id="vol" min="0.2" max="1" step="0.1" value="1"><b id="volV">1.0</b></label>
-      <label class="ver">버전 11/03 16:59</label>
+      <label class="ver">버전 11/04 20:36</label>
       <label>✏️ 글씨 색 <span id="inks"><button data-k="auto" class="ink on">자동</button><button data-k="#ffffff" class="ink" style="background:#fff" aria-label="흰색"></button><button data-k="#1c1a16" class="ink" style="background:#1c1a16" aria-label="검정"></button><button data-k="#ffd54a" class="ink" style="background:#ffd54a" aria-label="노랑"></button><button data-k="#ff6b6b" class="ink" style="background:#ff6b6b" aria-label="빨강"></button><button data-k="#4cd9a0" class="ink" style="background:#4cd9a0" aria-label="초록"></button></span></label>
     </div>
     <div id="chars"></div>
@@ -339,10 +339,25 @@ function onTap(el){
 let CH = null, WD = null, RELIDX = null, GR = null, LV = {};
 const GRADE_OF = {};
 const common = h => LV[h] ?? -1;   // 클수록 흔한 글자(8급=8 … 특급=0, 사전 밖=-1)
+let ST = {};                       // 한자별 [획수, 부수 글자] (유니코드 Unihan) — 없어도 앱은 동작한다
+let REST_DONE = false, restP = null;
 const dictReady = Promise.all([
-  fetch('dict/chars.json').then(r=>r.json()), fetch('dict/words.json').then(r=>r.json()), fetch('dict/grades.json').then(r=>r.json()), fetch('dict/levels.json').then(r=>r.json())
-]).then(([c,w,g,lv])=>{ CH = c; WD = w; GR = g; LV = lv; for (const k in g) for (const x of g[k]) GRADE_OF[x.h] = +k; setStatus(''); });
+  fetch('dict/chars.json').then(r=>r.json()), fetch('dict/words-core.json').then(r=>r.json()), fetch('dict/grades.json').then(r=>r.json()), fetch('dict/levels.json').then(r=>r.json()),
+  fetch('dict/strokes.json').then(r=>r.json()).catch(()=>({}))
+]).then(([c,w,g,lv,st])=>{ CH = c; WD = w; GR = g; LV = lv; ST = st; for (const k in g) for (const x of g[k]) GRADE_OF[x.h] = +k; setStatus(''); });
 setStatus('사전을 불러오는 중…');
+// 나머지 낱말(rest)은 화면이 열린 뒤 배경에서 합친다(흔한 한자어가 각 낱말의 앞이라 순서가 유지됨).
+// 처음 읽은 핵심 사전에서 못 찾은 낱말만 합쳐질 때까지 잠깐 기다린다. 실패하면 다음 조회 때 다시 시도한다.
+function ensureRest(){
+  if (REST_DONE) return Promise.resolve();
+  return restP ||= fetch('dict/words-rest.json').then(r=>{ if (!r.ok) throw new Error(r.status); return r.json(); }).then(rest=>{
+    for (const k in rest) WD[k] = WD[k] ? WD[k].concat(rest[k]) : rest[k];
+    RELIDX = null; REV = null; REST_DONE = true;
+  }).catch(()=>{ restP = null; });
+}
+dictReady.then(()=>{ const go = ()=>ensureRest(); window.requestIdleCallback ? requestIdleCallback(go, {timeout: 2500}) : setTimeout(go, 800); });
+// 오프라인: 서비스 워커가 앱·사전·글꼴을 저장해 둔다(처음 한 번 인터넷으로 열면 이후엔 인터넷 없이도 열림). 필기·음성 인식은 인터넷이 필요하다.
+if ('serviceWorker' in navigator) addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
 
 
 // --- 그림(이모지) ---
@@ -400,10 +415,12 @@ function render(reading, forms, idx=0){
   $('chars').innerHTML = info.map(c=>`<div><b>${esc(c.hanja)}</b><br>${esc(c.hun)} ${esc(c.eum)}${GRADE_OF[c.hanja]?`<br>${GRADE_OF[c.hanja]}급`:''}</div>`).join('');
   say(reading);
   const rel = related(word, reading);
+  const sl = info.map(c=>strokeLine(c.hanja)).filter(Boolean);
   $('info').innerHTML = `<h2>뜻과 쓰임</h2>
     <div class="tag">뜻풀이 (글자별 훈·음)</div>
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>(${esc(c.hun)} ${esc(c.eum)})`).join(' + ')}<br>
     → <b>${esc(reading)}</b> = ${info.map(c=>esc(c.hun||c.eum)).join(' · ')}</p>
+    ${sl.length ? `<div class="tag">획수·부수</div><p>${sl.join('<br>')}</p>` : ''}
     ${forms.length>1 ? `<div class="tag">같은 소리의 다른 한자어</div><div class="cands">${forms.map((f,i)=>`<button class="chip" data-i="${i}" ${i===idx?'style="border-color:var(--accent)"':''}>${esc(f)}</button>`).join('')}</div>`:''}
     ${rel.length ? `<div class="tag" style="margin-top:8px">같은 글자가 쓰인 말</div><ul class="cols">${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
   $('info').querySelectorAll('[data-i]').forEach(b=> b.onclick = ()=>render(reading, forms, +b.dataset.i));
@@ -419,9 +436,16 @@ function renderChars(syl){
   $('info').querySelectorAll('[data-h]').forEach(b=> b.onclick = ()=> lookupHanja(b.dataset.h));
 }
 let REV = null;
+function ensureREV(){ if (!REV){ REV = {}; for (const [k,v] of Object.entries(WD)) for (const h of v) (REV[h] ||= k); } return REV; }
+// 획수·부수 한 줄 (Unihan). 부수 이름은 훈·음 사전에서 찾는다.
+function strokeLine(h){
+  const s = ST[h]; if (!s) return '';
+  const r = s[1], rn = r ? mainMeaning(r) : '';
+  return `<b>${esc(h)}</b> ${+s[0]}획${r ? ` · 부수 ${esc(r)}${rn ? `(${esc(rn)})` : ''}` : ''}`;
+}
 function lookupHanja(t){
   const hs = [...t];
-  if (!REV){ REV = {}; for (const [k,v] of Object.entries(WD)) for (const h of v) (REV[h] ||= k); }
+  ensureREV();
   if (hs.length > 1 && REV[t]) return render(REV[t], WD[REV[t]], WD[REV[t]].indexOf(t));
   const big = $('big'); big.className=''; big.textContent = t; $('pic').textContent = pic(t);
   const info = hs.map(h=>({hanja:h, list: gradeMeaning(h) || CH[h]||[]}));
@@ -432,8 +456,10 @@ function lookupHanja(t){
     for (const [k,v] of Object.entries(WD)){ const h = v.find(x=>x.includes(t) && x.length===2); if (h) { rel.push([k,h]); if (rel.length>=300) break; } }
     const step = Math.max(1, Math.floor(rel.length/9)); rel = rel.filter((_,i)=>i%step===0).slice(0,9);
   }
+  const sl = info.map(c=>strokeLine(c.hanja)).filter(Boolean);
   $('info').innerHTML = `<h2>뜻과 쓰임</h2><div class="tag">훈·음</div>
     <p>${info.map(c=>`<b>${esc(c.hanja)}</b>: ${c.list.length ? c.list.map(esc).join(' / ') : '사전에 없는 글자'}`).join('<br>')}</p>
+    ${sl.length ? `<div class="tag">획수·부수</div><p>${sl.join('<br>')}</p>` : ''}
     ${rel.length ? `<div class="tag">이 글자가 쓰인 말</div><ul class="cols">${rel.map(([k,h])=>`<li>${pic(h).slice(0,2)} ${esc(h)} (${esc(k)})</li>`).join('')}</ul>`:''}`;
 }
 
@@ -481,8 +507,9 @@ async function lookup(text){
   await dictReady; seq++;
   const t = clean(text);
   if (!t){ setStatus('글자를 알아보지 못했어요.'); return; }
-  if ([...t].every(isH)) return lookupHanja(t);
-  const m = findMatch(t);
+  if ([...t].every(isH)){ if ([...t].length > 1 && !REST_DONE && !ensureREV()[t]) await ensureRest(); return lookupHanja(t); }
+  let m = findMatch(t);
+  if ((!m || m.from) && !REST_DONE){ await ensureRest(); m = findMatch(t); }   // 핵심 사전에서 못 찾았거나 '일부만 일치'하면, 나머지가 합쳐진 뒤 다시 찾는다
   if (m){
     if (m.from) setStatus(`'${m.from}'에서 '${m.key}'을(를) 찾았어요.`);
     if (m.kind === 'he'){

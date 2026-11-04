@@ -1,4 +1,5 @@
-// source/hanja.txt (libhangul) → dict/{chars,words}.json
+// source/hanja.txt (libhangul) → dict/{chars,words-core,words-rest}.json
+// 낱말 사전은 둘로 나눈다: core(흔한 글자 위주, 앱이 처음 열릴 때 읽음) + rest(나머지, 배경에서 합침). 합치면 예전 words.json 과 똑같다.
 import fs from 'node:fs';
 const isHanja = (c) => /[㐀-鿿豈-﫿]/.test(c);
 const chars = {}; // 한자 → ["훈 음", ...]
@@ -22,5 +23,12 @@ const LV = JSON.parse(fs.readFileSync('source/levels.json', 'utf8'));
 const score = (w) => [...w].reduce((a, c) => a + (LV[c] ?? -1), 0) / [...w].length;
 for (const k in words) words[k] = words[k].map((w, i) => [w, i]).sort((a, b) => score(b[0]) - score(a[0]) || a[1] - b[1]).map((x) => x[0]);
 fs.writeFileSync('dict/chars.json', JSON.stringify(chars));
-fs.writeFileSync('dict/words.json', JSON.stringify(words));
-console.log('chars', Object.keys(chars).length, 'words', Object.keys(words).length);
+// 흔한 정도(score = 글자 급수 평균)가 CORE_SCORE 이상인 한자어만 core. 한자어가 score 내림차순이라 core 는 각 낱말의 '앞쪽'이 되어 합쳐도 순서가 유지된다.
+const CORE_SCORE = 6;
+const core = {}, rest = {};
+for (const k in words) {
+  for (const w of words[k]) ((score(w) >= CORE_SCORE ? core : rest)[k] ||= []).push(w);
+}
+fs.writeFileSync('dict/words-core.json', JSON.stringify(core));
+fs.writeFileSync('dict/words-rest.json', JSON.stringify(rest));
+console.log('chars', Object.keys(chars).length, 'words', Object.keys(words).length, '| core', Object.keys(core).length, 'rest', Object.keys(rest).length);
