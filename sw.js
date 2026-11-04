@@ -33,11 +33,11 @@ self.addEventListener('activate', (e) => {
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 
-async function networkFirst(req) {
+async function networkFirst(e, req) {
   const cache = await caches.open(VERSION);
   try {
     const res = await withTimeout(fetch(req), 4000);
-    if (res && res.ok) cache.put(req, res.clone());
+    if (res && res.ok) e.waitUntil(cache.put(req, res.clone()));
     return res;
   } catch (_) {
     const hit = (await cache.match(req)) || (await cache.match(req, { ignoreSearch: true })) || (req.mode === 'navigate' ? await cache.match('index.html') : null);
@@ -45,22 +45,23 @@ async function networkFirst(req) {
   }
 }
 
-async function staleWhileRevalidate(req) {
+async function staleWhileRevalidate(e, req) {
   const cache = await caches.open(VERSION);
   const hit = await cache.match(req);
   const update = fetch(new Request(req, { cache: 'no-cache' }))      // 서버에 바뀌었는지만 확인(ETag) → 같으면 304
-    .then((res) => { if (res && res.ok) cache.put(req, res.clone()); return res; })
+    .then(async (res) => { if (res && res.ok) await cache.put(req, res.clone()); return res; })
     .catch(() => null);
+  e.waitUntil(update);                                               // 응답을 먼저 주더라도 저장이 끝날 때까지 서비스 워커를 살려 둔다
   return hit || (await update) || Response.error();
 }
 
-async function cacheFirst(req) {
+async function cacheFirst(e, req) {
   const cache = await caches.open(VERSION);
   const hit = await cache.match(req);
   if (hit) return hit;
   try {
     const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
+    if (res && res.ok) e.waitUntil(cache.put(req, res.clone()));
     return res;
   } catch (_) {
     return Response.error();
@@ -73,10 +74,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;                   // 외부(구글 필기 인식 등)는 그대로 통과
   const p = url.pathname;
-  if (p.startsWith(FONT_PATH)) return void e.respondWith(p.endsWith('.woff2') ? cacheFirst(req) : staleWhileRevalidate(req));
+  if (p.startsWith(FONT_PATH)) return void e.respondWith(p.endsWith('.woff2') ? cacheFirst(e, req) : staleWhileRevalidate(e, req));
   if (!p.startsWith(APP_PATH)) return;
   if (req.mode === 'navigate' || p.endsWith('/') || p.endsWith('.html') || p.endsWith('.webmanifest') || p.endsWith('/sw.js')) {
-    return void e.respondWith(networkFirst(req));
+    return void e.respondWith(networkFirst(e, req));
   }
-  e.respondWith(staleWhileRevalidate(req));
+  e.respondWith(staleWhileRevalidate(e, req));
 });
