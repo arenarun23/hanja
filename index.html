@@ -150,6 +150,7 @@
 .left h2{padding-left:52px}
 @media (max-width:600px),(max-height:520px){.left{padding-top:52px}}
 </style>
+<script src="../aiedu-log.js"></script>
 </head>
 <body>
 <a class="aiedu-home" href="../" title="AIEDU 처음으로" aria-label="AIEDU 허브로 돌아가기"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><polygon points="32,6 39.2,23.6 58,25.2 43.7,37.6 48.1,56 32,46.2 15.9,56 20.3,37.6 6,25.2 24.8,23.6" fill="#ff7aa8" stroke="#ff7aa8" stroke-width="6" stroke-linejoin="round"/><ellipse cx="25.5" cy="33" rx="2.4" ry="3.2" fill="#4a3426"/><ellipse cx="38.5" cy="33" rx="2.4" ry="3.2" fill="#4a3426"/><ellipse cx="20.5" cy="39.5" rx="3.4" ry="2.1" fill="#ff4f86" opacity=".5"/><ellipse cx="43.5" cy="39.5" rx="3.4" ry="2.1" fill="#ff4f86" opacity=".5"/><path d="M28 39.5q4 4.4 8 0" fill="none" stroke="#4a3426" stroke-width="2.4" stroke-linecap="round"/></svg></a>
@@ -512,6 +513,7 @@ function findMatch(t){
   return null;
 }
 async function lookup(text){
+  window.aieduLog && aieduLog('use');   // 이용 기록(횟수만, 입력 내용은 보내지 않음)
   await dictReady; seq++;
   const t = clean(text);
   if (!t){ setStatus('글자를 알아보지 못했어요.'); return; }
